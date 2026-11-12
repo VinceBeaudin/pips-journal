@@ -168,7 +168,7 @@ function renderAccountView(account, main) {
       <div id="trade-list"></div>
     </div>
 
-    <input type="file" id="file-input" accept=".csv,.pdf" hidden>
+    <input type="file" id="file-input" accept=".csv,.pdf,application/pdf,text/csv" hidden>
   `;
 
   // Chart

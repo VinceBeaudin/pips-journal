@@ -767,6 +767,9 @@ async function parsePDFFile(file) {
   }
   if (trades.length > 0) return trades;
 
+  console.log('[PDF] Approach 1:', trades.length, 'trades. Rows with XAUUSD:', rows.filter(r => r.items[0]?.text === 'XAUUSD').length);
+  if (trades.length > 0) return trades;
+
   // Approach 2: fields on separate y-rows (pdftotext-style) → chunk-based
   const chunks = [];
   for (const row of rows) {
@@ -784,7 +787,9 @@ async function parsePDFFile(file) {
     }
     if (chunk.trim()) chunks.push(chunk.trim());
   }
-  return parsePDFChunks(chunks);
+  const result = parsePDFChunks(chunks);
+  console.log('[PDF] Approach 2:', result.length, 'trades. Total chunks:', chunks.length, '. XAUUSD chunks:', chunks.filter(c => c === 'XAUUSD').length);
+  return result;
 }
 
 function parsePDFChunks(chunks) {
@@ -1055,7 +1060,7 @@ function renderAccountView(account, main) {
       <div id="trade-list"></div>
     </div>
 
-    <input type="file" id="file-input" accept=".csv,.pdf" hidden>
+    <input type="file" id="file-input" accept=".csv,.pdf,application/pdf,text/csv" hidden>
   `;
 
   renderChart($('chart-container'), account.trades);
