@@ -30,7 +30,10 @@ function fmtPips(v) {
 }
 
 function fmtDate(iso) {
-  return new Intl.DateTimeFormat('fr-CA', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return new Intl.DateTimeFormat('fr-CA', { day: 'numeric', month: 'short', year: 'numeric' }).format(d);
 }
 
 function totalPips(trades) {
@@ -43,6 +46,10 @@ function monthPips(trades) {
   return trades
     .filter(t => new Date(t.closeTime) >= start)
     .reduce((s, t) => s + t.pips, 0);
+}
+
+function posClass(v) {
+  return v > 1e-8 ? 'pos' : v < -1e-8 ? 'neg' : 'neutral';
 }
 
 // ── Sidebar render ────────────────────────────────────
@@ -115,13 +122,11 @@ function renderAccountView(account, main) {
     ? fmtDate([...account.trades].sort((a, b) => new Date(b.closeTime) - new Date(a.closeTime))[0].closeTime)
     : null;
 
-  const posClass = v => v > 1e-8 ? 'pos' : v < -1e-8 ? 'neg' : 'neutral';
-
   main.innerHTML = `
     <div class="account-header">
       <div>
         <h1>${esc(account.name)}</h1>
-        <div class="account-meta">${count} trade${count !== 1 ? 's' : ''}${lastDate ? ' · mis à jour le ' + lastDate : ''}</div>
+        <div class="account-meta">${count} trade${count !== 1 ? 's' : ''}${lastDate ? ' · mis à jour le ' + esc(lastDate) : ''}</div>
       </div>
       <div class="header-actions">
         <button class="btn-primary" id="btn-import">↥ Importer CSV</button>
@@ -142,7 +147,7 @@ function renderAccountView(account, main) {
         <div class="stat-sub">pips nets</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Trades</div>
+        <div class="stat-label">Nb de trades</div>
         <div class="stat-value neutral">${count}</div>
         <div class="stat-sub">positions clôturées</div>
       </div>
@@ -197,7 +202,7 @@ function renderTradeList(account) {
 
   list.innerHTML = sorted.map(t => {
     const isPos = t.pips >= 0;
-    const dirClass = t.direction === 'Acheter' ? 'buy' : 'sell';
+    const dirClass = (t.direction === 'Acheter' || t.direction === 'Buy') ? 'buy' : 'sell';
     const hasNote = t.note && (t.note.emotion || t.note.text);
     const noteLabel = hasNote ? (t.note.emotion ? t.note.emotion : '📝') : '+ Note';
 
@@ -227,38 +232,6 @@ function renderTradeList(account) {
       </div>
     </div>`;
   }).join('');
-
-  // Note toggle & save
-  list.addEventListener('click', e => {
-    const noteBtn = e.target.closest('[data-note-key]');
-    if (noteBtn) {
-      const key = noteBtn.dataset.noteKey;
-      const area = document.getElementById('note-' + key);
-      if (area) area.classList.toggle('open');
-      return;
-    }
-
-    const saveBtn = e.target.closest('[data-save-key]');
-    if (saveBtn) {
-      const key = saveBtn.dataset.saveKey;
-      const accId = saveBtn.dataset.accountId;
-      const emotion = list.querySelector(`[data-emotion-key="${CSS.escape(key)}"]`)?.value ?? '';
-      const text = list.querySelector(`[data-text-key="${CSS.escape(key)}"]`)?.value?.trim() ?? '';
-      try {
-        saveNote(accId, key, { emotion, text });
-        toast('Note enregistrée.');
-        renderSidebar();
-        const btn = list.querySelector(`[data-note-key="${CSS.escape(key)}"]`);
-        if (btn) {
-          const hasNote = emotion || text;
-          btn.className = `btn-note ${hasNote ? 'has-note' : ''}`;
-          btn.textContent = hasNote ? (emotion || '📝') : '+ Note';
-        }
-      } catch (err) {
-        toast(err.message);
-      }
-    }
-  });
 }
 
 // ── Total view ────────────────────────────────────────
@@ -267,7 +240,6 @@ function renderTotalView(state, main) {
   const total = totalPips(allTrades);
   const mth = monthPips(allTrades);
   const count = allTrades.length;
-  const posClass = v => v > 1e-8 ? 'pos' : v < -1e-8 ? 'neg' : 'neutral';
 
   const sorted = [...allTrades].sort((a, b) => new Date(a.closeTime) - new Date(b.closeTime));
 
@@ -430,6 +402,40 @@ $('dialog-cancel').addEventListener('click', () => {
 
 $('account-dialog').addEventListener('keydown', e => {
   if (e.key === 'Enter') $('dialog-confirm').click();
+});
+
+// Single delegated listener for note interactions (trade list)
+$('main').addEventListener('click', e => {
+  const noteBtn = e.target.closest('[data-note-key]');
+  if (noteBtn) {
+    const key = noteBtn.dataset.noteKey;
+    const area = document.getElementById('note-' + key);
+    if (area) area.classList.toggle('open');
+    return;
+  }
+
+  const saveBtn = e.target.closest('[data-save-key]');
+  if (saveBtn) {
+    const key = saveBtn.dataset.saveKey;
+    const accId = saveBtn.dataset.accountId;
+    const list = $('trade-list');
+    if (!list) return;
+    const emotion = list.querySelector(`[data-emotion-key="${CSS.escape(key)}"]`)?.value ?? '';
+    const text = list.querySelector(`[data-text-key="${CSS.escape(key)}"]`)?.value?.trim() ?? '';
+    try {
+      saveNote(accId, key, { emotion, text });
+      toast('Note enregistrée.');
+      renderSidebar();
+      const btn = list.querySelector(`[data-note-key="${CSS.escape(key)}"]`);
+      if (btn) {
+        const hasNote = emotion || text;
+        btn.className = `btn-note ${hasNote ? 'has-note' : ''}`;
+        btn.textContent = hasNote ? (emotion || '📝') : '+ Note';
+      }
+    } catch (err) {
+      toast(err.message);
+    }
+  }
 });
 
 // ── Init ──────────────────────────────────────────────
