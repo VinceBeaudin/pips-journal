@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#142939">
+  <title>Pips — Journal XAUUSD</title>
+  <style>
+/* css/styles.css */
+:root {
+  --navy:   #142939;
+  --gold:   #c5a45f;
+  --ink:    #213747;
+  --muted:  #667782;
+  --bg:     #f3f6f8;
+  --line:   #e1e8ed;
+  --green:  #287763;
+  --red:    #b45555;
+  --white:  #ffffff;
+  --sidebar-w: 210px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+}
+
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; border: none; background: none; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+a { color: inherit; text-decoration: none; }
+[hidden] { display: none !important; }
+
+/* ── Layout ─────────────────────────────────────────── */
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(--sidebar-w);
+  background: var(--navy);
+  color: #d6e1e8;
+  padding: 28px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.brand {
+  font-size: 28px;
+  font-weight: 750;
+  letter-spacing: -1.5px;
+  color: #fff;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+}
+
+.brand-dot { color: var(--gold); }
+
+.sidebar-label {
+  font-size: 9px;
+  letter-spacing: .6px;
+  color: #8ea4b3;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.account-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.account-btn {
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  border-radius: 7px;
+  color: #8ea4b3;
+  transition: background .12s, color .12s;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.account-btn:hover { background: #1e3547; color: #c8d8e2; }
+
+.account-btn.active {
+  background: #263e50;
+  color: #fff;
+}
+
+.account-btn .acc-name { font-size: 12px; font-weight: 600; }
+.account-btn .acc-pips { font-size: 10px; }
+.account-btn.active .acc-pips { color: var(--gold); }
+
+.btn-add-account {
+  width: 100%;
+  text-align: center;
+  padding: 7px;
+  border: 1px dashed #304555;
+  border-radius: 7px;
+  font-size: 11px;
+  color: #8ea4b3;
+  margin-top: 4px;
+  transition: border-color .12s, color .12s;
+  cursor: pointer;
+}
+
+.btn-add-account:hover { border-color: #c5a45f; color: #c5a45f; }
+
+.sidebar-total {
+  margin-top: auto;
+  border-top: 1px solid #304555;
+  padding-top: 16px;
+}
+
+.total-btn {
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  border-radius: 7px;
+  color: #8ea4b3;
+  transition: background .12s;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.total-btn:hover { background: #1e3547; }
+.total-btn.active { background: #263e50; }
+
+.total-label { font-size: 9px; color: #8ea4b3; letter-spacing: .5px; text-transform: uppercase; }
+
+.total-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: -1px;
+  line-height: 1.1;
+}
+
+.total-sub { font-size: 9px; color: #8ea4b3; }
+
+/* ── Main ─────────────────────────────────────────── */
+
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  padding: 32px 36px 48px;
+  max-width: 1100px;
+}
+
+/* ── Empty state ─────────────────────────────────── */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state .icon { font-size: 32px; color: #97aab7; }
+.empty-state strong { font-size: 15px; color: var(--ink); font-weight: 500; }
+.empty-state p { font-size: 12px; margin: 0; }
+
+/* ── Account header ──────────────────────────────── */
+
+.account-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.account-header h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  margin: 0 0 4px;
+  color: var(--navy);
+}
+
+.account-meta { font-size: 11px; color: var(--muted); }
+
+.header-actions { display: flex; gap: 8px; align-items: center; }
+
+/* ── Buttons ─────────────────────────────────────── */
+
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--navy); color: #fff;
+  border-radius: 7px; padding: 9px 14px;
+  font-size: 12px; font-weight: 600;
+  transition: background .12s;
+  cursor: pointer;
+}
+.btn-primary:hover { background: #2c475a; }
+
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--white); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 7px; padding: 9px 14px;
+  font-size: 12px; font-weight: 600;
+  transition: border-color .12s, background .12s;
+  cursor: pointer;
+}
+.btn-secondary:hover { border-color: #bcc8d0; background: #f8fafb; }
+
+.btn-danger {
+  display: inline-flex; align-items: center;
+  background: none; color: var(--red);
+  font-size: 12px; padding: 9px 4px;
+  transition: opacity .12s;
+  cursor: pointer;
+}
+.btn-danger:hover { opacity: .7; }
+
+/* ── Stats cards ──────────────────────────────────── */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+
+.stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 700; letter-spacing: -1px; line-height: 1.1; }
+.stat-value.pos { color: var(--green); }
+.stat-value.neg { color: var(--red); }
+.stat-value.neutral { color: var(--navy); }
+.stat-sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+/* ── Chart card ──────────────────────────────────── */
+
+.chart-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 20px;
+}
+
+.chart-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.chart-card-title { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.chart-dates { font-size: 9px; color: var(--muted); }
+
+.chart-container { height: 160px; }
+
+/* ── Trade list ──────────────────────────────────── */
+
+.trades-panel {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.trades-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.trades-panel-title { font-size: 12px; font-weight: 650; color: var(--ink); }
+
+.trade-row {
+  border-bottom: 1px solid var(--line);
+  transition: background .1s;
+}
+.trade-row:last-child { border-bottom: none; }
+.trade-row:hover { background: #fafcfd; }
+
+.trade-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+}
+
+.direction-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.direction-badge.buy  { background: #e8f5ef; color: #287763; }
+.direction-badge.sell { background: #fdf0ef; color: #9f6258; }
+
+.trade-date { font-size: 11px; color: var(--muted); flex: 1; }
+.trade-qty  { font-size: 10px; color: var(--muted); min-width: 60px; }
+
+.trade-pips {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 80px;
+  text-align: right;
+}
+.trade-pips.pos { color: var(--green); }
+.trade-pips.neg { color: var(--red); }
+
+.btn-note {
+  font-size: 10px;
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 5px;
+  transition: background .1s, color .1s;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.btn-note:hover { background: var(--bg); color: var(--ink); }
+.btn-note.has-note { color: var(--gold); }
+
+/* ── Inline note form ─────────────────────────────── */
+
+.note-area {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .2s ease, opacity .2s ease;
+  opacity: 0;
+}
+
+.note-area.open {
+  max-height: 200px;
+  opacity: 1;
+}
+
+.note-inner {
+  padding: 12px 18px 14px;
+  background: #f8fafb;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.note-row { display: flex; gap: 10px; align-items: flex-start; }
+
+.emotion-select {
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 11px;
+  background: var(--white);
+  color: var(--ink);
+  width: 140px;
+}
+
+.note-textarea {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 11px;
+  background: var(--white);
+  color: var(--ink);
+  resize: none;
+  height: 60px;
+  line-height: 1.5;
+}
+
+.note-textarea:focus, .emotion-select:focus {
+  outline: none;
+  border-color: #94aab8;
+}
+
+.note-save-btn {
+  align-self: flex-end;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--navy);
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--white);
+  transition: background .1s;
+  cursor: pointer;
+}
+.note-save-btn:hover { background: var(--bg); }
+
+/* ── Toast ───────────────────────────────────────── */
+
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--navy);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 12px;
+  box-shadow: 0 4px 24px #0002;
+  z-index: 100;
+  transition: opacity .2s;
+}
+
+/* ── Dialog ──────────────────────────────────────── */
+
+dialog {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 24px;
+  width: min(420px, calc(100% - 24px));
+  color: var(--ink);
+  box-shadow: 0 16px 80px #10263428;
+}
+
+dialog::backdrop { background: #0b233770; backdrop-filter: blur(2px); }
+
+.dialog-title { font-size: 15px; font-weight: 650; margin: 0 0 16px; }
+
+.dialog-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--ink);
+  margin-bottom: 16px;
+}
+
+.dialog-input:focus { outline: none; border-color: #94aab8; }
+
+.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* ── Print / PDF ─────────────────────────────────── */
+
+@media print {
+  .sidebar,
+  #toast,
+  dialog,
+  .btn-print,
+  #btn-import,
+  #btn-rename,
+  #btn-delete,
+  #btn-add-account,
+  #file-input,
+  .btn-note,
+  .note-area { display: none !important; }
+
+  body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .layout { display: block !important; }
+
+  .main {
+    margin-left: 0 !important;
+    max-width: 100% !important;
+    padding: 24px !important;
+    display: block !important;
+  }
+
+  .stats-grid { display: grid !important; }
+
+  .stat-card { break-inside: avoid; }
+  .chart-card { break-inside: avoid; }
+
+  .trades-panel {
+    overflow: visible !important;
+    border-radius: 0 !important;
+    border: 1px solid #ccc !important;
+  }
+
+  .trade-row { border-bottom: 1px solid #e1e8ed !important; }
+  .trade-row:hover { background: none !important; }
+
+  .trade-pips.pos { color: #287763 !important; }
+  .trade-pips.neg { color: #b45555 !important; }
+  .direction-badge.buy  { background: #e8f5ef !important; color: #287763 !important; }
+  .direction-badge.sell { background: #fdf0ef !important; color: #9f6258 !important; }
+}
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">pips<span class="brand-dot">.</span></div>
+    <div class="sidebar-label">Mes comptes</div>
+    <div class="account-list" id="account-list">
+      <!-- Rendered by JS -->
+    </div>
+    <button class="btn-add-account" id="btn-add-account">+ Nouveau compte</button>
+    <div class="sidebar-total">
+      <button class="total-btn" id="btn-total">
+        <span class="total-label">Total global</span>
+        <span class="total-value" id="sidebar-total-value">—</span>
+        <span class="total-sub">pips cumulés</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main" id="main">
+    <!-- Rendered by JS -->
+  </main>
+
+</div>
+
+<!-- Toast notification -->
+<div id="toast" hidden></div>
+
+<!-- Dialog: account name -->
+<dialog id="account-dialog">
+  <p class="dialog-title" id="dialog-title">Nouveau compte</p>
+  <input class="dialog-input" id="dialog-input" type="text" placeholder="Nom du compte" maxlength="60">
+  <div class="dialog-actions">
+    <button class="btn-secondary" id="dialog-cancel">Annuler</button>
+    <button class="btn-primary" id="dialog-confirm">Créer</button>
+  </div>
+</dialog>
+
+<script>
+// ── storage.js ────────────────────────────────────────
+const KEY = 'pips-xau-v1';
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return { version: 1, accounts: [] };
+    const state = JSON.parse(raw);
+    if (state.version !== 1 || !Array.isArray(state.accounts)) {
+      return { version: 1, accounts: [] };
+    }
+    return state;
+  } catch {
+    return { version: 1, accounts: [] };
+  }
+}
+
+function saveState(state) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  } catch (e) {
+    throw new Error('Impossible d\'enregistrer : stockage plein ou inaccessible.');
+  }
+}
+
+function createAccount(name) {
+  const state = loadState();
+  const account = { id: crypto.randomUUID(), name: name.trim(), trades: [] };
+  state.accounts.push(account);
+  saveState(state);
+  return account;
+}
+
+function renameAccount(id, name) {
+  const state = loadState();
+  const account = state.accounts.find(a => a.id === id);
+  if (!account) return false;
+  account.name = name.trim();
+  saveState(state);
+  return true;
+}
+
+function deleteAccount(id) {
+  const state = loadState();
+  const before = state.accounts.length;
+  state.accounts = state.accounts.filter(a => a.id !== id);
+  saveState(state);
+  return state.accounts.length < before;
+}
+
+function addTrades(accountId, trades) {
+  const state = loadState();
+  const account = state.accounts.find(a => a.id === accountId);
+  if (!account) return { added: 0, skipped: 0 };
+  const existing = new Set(account.trades.map(t => t.key));
+  const newTrades = trades.filter(t => !existing.has(t.key));
+  account.trades.push(...newTrades);
+  saveState(state);
+  return { added: newTrades.length, skipped: trades.length - newTrades.length };
+}
+
+function saveNote(accountId, tradeKey, note) {
+  const state = loadState();
+  const account = state.accounts.find(a => a.id === accountId);
+  if (!account) return false;
+  const trade = account.trades.find(t => t.key === tradeKey);
+  if (!trade) return false;
+  trade.note = note;
+  saveState(state);
+  return true;
+}
+
+// ── csv.js ────────────────────────────────────────────
+const MONTHS = {
+  // English
+  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+  // French (cTrader exports French abbreviations when UI is in French)
+  Avr: 3, Mai: 4, Juin: 5, Juil: 6, Jui: 6, Aou: 7, Fev: 1
+};
+
+function parseCTraderDate(str) {
+  // Format: "30 Oct 2026 08:57:37.770" or "30 Avr 2026 08:57:37.770"
+  const m = str.match(/^(\d+)\s+(\w+)\s+(\d+)\s+(\d+):(\d+):(\d+)\.(\d+)/);
+  if (!m) return null;
+  const [, day, mon, year, h, min, s, ms] = m;
+  const monthIndex = MONTHS[mon];
+  if (monthIndex === undefined) return null; // unknown month → skip trade
+  return new Date(Date.UTC(+year, monthIndex, +day, +h, +min, +s, +ms)).toISOString();
+}
+
+function parseNum(str) {
+  return parseFloat(str.replace(/\s/g, ''));
+}
+
+function buildKey(symbol, closeTime, entryPrice, exitPrice) {
+  return `${symbol}|${closeTime}|${entryPrice}|${exitPrice}`;
+}
+
+function parseCSV(text) {
+  const lines = text
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+
+  // Line 0: "Transactions", Line 1: column headers, Line 2+: data
+  const dataLines = lines.slice(2);
+
+  const trades = [];
+
+  for (const line of dataLines) {
+    const cols = line.split(',');
+    if (cols.length < 8) continue;
+
+    const symbol      = cols[0].trim();
+    const direction   = cols[1].trim();
+    const closeRaw    = cols[2].trim();
+    const entryRaw    = cols[3].trim();
+    const exitRaw     = cols[4].trim();
+    const quantity    = cols[5].trim();
+    const pipsRaw     = cols[6].trim();
+    const netUSDRaw   = cols[7].trim();
+
+    if (symbol !== 'XAUUSD') continue;
+
+    const entryPrice = parseNum(entryRaw);
+    const exitPrice  = parseNum(exitRaw);
+    const pips       = parseNum(pipsRaw);
+    const netUSD     = parseNum(netUSDRaw);
+
+    if (isNaN(entryPrice) || isNaN(exitPrice) || isNaN(pips)) continue;
+
+    const closeTime = parseCTraderDate(closeRaw);
+    if (!closeTime) continue;
+    const key = buildKey(symbol, closeTime, entryRaw, exitRaw);
+
+    trades.push({
+      key,
+      symbol,
+      direction,
+      closeTime,
+      entryPrice,
+      exitPrice,
+      quantity,
+      pips,
+      netUSD,
+      note: null
+    });
+  }
+
+  return trades;
+}
+
+// ── chart.js ──────────────────────────────────────────
+function renderChart(container, trades) {
+  const sorted = [...trades].sort(
+    (a, b) => new Date(a.closeTime) - new Date(b.closeTime)
+  );
+
+  if (sorted.length === 0) {
+    container.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                  height:100%;color:#8596a3;gap:6px;font-size:12px;">
+        <span style="font-size:22px;">◫</span>
+        <span>Importe un CSV pour voir ta courbe</span>
+      </div>`;
+    return;
+  }
+
+  const W = 600, H = 160;
+  const PAD = { l: 46, r: 14, t: 12, b: 22 };
+
+  let cum = 0;
+  const pts = sorted.map(t => ({ date: new Date(t.closeTime), v: (cum += t.pips) }));
+
+  const values = [0, ...pts.map(p => p.v)];
+  let lo = Math.min(...values);
+  let hi = Math.max(...values);
+  if (hi === lo) { lo -= 10; hi += 10; }
+  const mg = (hi - lo) * 0.12;
+  lo -= mg; hi += mg;
+
+  const minT = pts[0].date.getTime();
+  const maxT = pts.at(-1).date.getTime();
+  const tRange = maxT - minT || 1;
+
+  const toX = t => PAD.l + (t.getTime() - minT) / tRange * (W - PAD.l - PAD.r);
+  const toY = v => H - PAD.b - (v - lo) / (hi - lo) * (H - PAD.t - PAD.b);
+
+  const coords = [[PAD.l, toY(0)], ...pts.map(p => [toX(p.date), toY(p.v)])];
+  const d = coords.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+
+  const total = cum;
+  const color = total >= 0 ? '#287763' : '#b45555';
+  const fill  = total >= 0 ? '#eaf3ef' : '#fdf0ef';
+
+  const lx = coords.at(-1)[0].toFixed(1);
+  const ly = coords.at(-1)[1].toFixed(1);
+  const base = toY(0).toFixed(1);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block;">`;
+
+  for (let i = 0; i <= 3; i++) {
+    const v = lo + (hi - lo) * i / 3;
+    const y = toY(v).toFixed(1);
+    svg += `<line x1="${PAD.l}" y1="${y}" x2="${W - PAD.r}" y2="${y}" stroke="#e6edf1" ${i ? 'stroke-dasharray="3 5"' : ''}/>`;
+    svg += `<text x="${PAD.l - 5}" y="${(+y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#8596a3">${v.toFixed(0)}</text>`;
+  }
+
+  if (lo < 0 && hi > 0) {
+    const y0 = toY(0).toFixed(1);
+    svg += `<line x1="${PAD.l}" y1="${y0}" x2="${W - PAD.r}" y2="${y0}" stroke="#bcc8d0" stroke-width="0.75"/>`;
+  }
+
+  svg += `<path d="${d} L${lx},${base} L${PAD.l},${base} Z" fill="${fill}" opacity="0.65"/>`;
+  svg += `<path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  svg += `<circle cx="${lx}" cy="${ly}" r="3.5" fill="${color}"/>`;
+  svg += `</svg>`;
+
+  container.innerHTML = svg;
+}
+
+// ── app.js ────────────────────────────────────────────
+let selectedId = null; // account id or 'total'
+
+const $ = id => document.getElementById(id);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+);
+
+let toastTimer;
+function toast(msg) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 4000);
+}
+
+function fmtPips(v) {
+  const n = Math.abs(v) < 1e-8 ? 0 : v;
+  const s = new Intl.NumberFormat('fr-CA', { maximumFractionDigits: 1 }).format(n);
+  return (n > 1e-8 ? '+' : '') + s;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return new Intl.DateTimeFormat('fr-CA', { day: 'numeric', month: 'short', year: 'numeric' }).format(d);
+}
+
+function totalPips(trades) {
+  return trades.reduce((s, t) => s + t.pips, 0);
+}
+
+function monthPips(trades) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  return trades
+    .filter(t => new Date(t.closeTime) >= start)
+    .reduce((s, t) => s + t.pips, 0);
+}
+
+function posClass(v) {
+  return v > 1e-8 ? 'pos' : v < -1e-8 ? 'neg' : 'neutral';
+}
+
+function renderSidebar() {
+  const state = loadState();
+  const list = $('account-list');
+
+  list.innerHTML = state.accounts.map(acc => {
+    const total = totalPips(acc.trades);
+    const cls = selectedId === acc.id ? 'account-btn active' : 'account-btn';
+    const pipStr = acc.trades.length ? fmtPips(total) + ' pips' : '— pips';
+    return `<button class="${cls}" data-id="${esc(acc.id)}">
+      <span class="acc-name">${esc(acc.name)}</span>
+      <span class="acc-pips">${esc(pipStr)}</span>
+    </button>`;
+  }).join('');
+
+  const allTrades = state.accounts.flatMap(a => a.trades);
+  const grandTotal = totalPips(allTrades);
+  $('sidebar-total-value').textContent = allTrades.length ? fmtPips(grandTotal) : '—';
+  $('btn-total').className = selectedId === 'total' ? 'total-btn active' : 'total-btn';
+}
+
+function navigate(id) {
+  selectedId = id;
+  renderSidebar();
+  renderMain();
+}
+
+function renderMain() {
+  const state = loadState();
+  const main = $('main');
+
+  if (!state.accounts.length) {
+    main.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">◫</div>
+        <strong>Crée ton premier compte pour commencer.</strong>
+        <p>Clique sur "+ Nouveau compte" dans la barre latérale.</p>
+      </div>`;
+    return;
+  }
+
+  if (selectedId === 'total') {
+    renderTotalView(state, main);
+    return;
+  }
+
+  const account = state.accounts.find(a => a.id === selectedId);
+  if (!account) {
+    selectedId = state.accounts[0].id;
+    renderSidebar();
+    renderAccountView(state.accounts[0], main);
+    return;
+  }
+
+  renderAccountView(account, main);
+}
+
+function renderAccountView(account, main) {
+  const total = totalPips(account.trades);
+  const mth   = monthPips(account.trades);
+  const count = account.trades.length;
+
+  const lastDate = count
+    ? fmtDate([...account.trades].sort((a, b) => new Date(b.closeTime) - new Date(a.closeTime))[0].closeTime)
+    : null;
+
+  main.innerHTML = `
+    <div class="account-header">
+      <div>
+        <h1>${esc(account.name)}</h1>
+        <div class="account-meta">${count} trade${count !== 1 ? 's' : ''}${lastDate ? ' · mis à jour le ' + esc(lastDate) : ''}</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-primary" id="btn-import">↥ Importer CSV</button>
+        <button class="btn-secondary btn-print" onclick="window.print()">↓ PDF</button>
+        <button class="btn-secondary" id="btn-rename">Renommer</button>
+        <button class="btn-danger" id="btn-delete">Supprimer</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total cumulé</div>
+        <div class="stat-value ${posClass(total)}">${count ? fmtPips(total) : '—'}</div>
+        <div class="stat-sub">pips nets</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ce mois-ci</div>
+        <div class="stat-value ${posClass(mth)}">${count ? fmtPips(mth) : '—'}</div>
+        <div class="stat-sub">pips nets</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Nb de trades</div>
+        <div class="stat-value neutral">${count}</div>
+        <div class="stat-sub">positions clôturées</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Courbe cumulative</span>
+        <span class="chart-dates" id="chart-dates"></span>
+      </div>
+      <div class="chart-container" id="chart-container"></div>
+    </div>
+
+    <div class="trades-panel">
+      <div class="trades-panel-header">
+        <span class="trades-panel-title">Tous les trades</span>
+      </div>
+      <div id="trade-list"></div>
+    </div>
+
+    <input type="file" id="file-input" accept=".csv" hidden>
+  `;
+
+  renderChart($('chart-container'), account.trades);
+  if (account.trades.length) {
+    const sorted = [...account.trades].sort((a, b) => new Date(a.closeTime) - new Date(b.closeTime));
+    $('chart-dates').textContent = fmtDate(sorted[0].closeTime) + ' — ' + fmtDate(sorted.at(-1).closeTime);
+  }
+
+  renderTradeList(account);
+
+  $('btn-import').addEventListener('click', () => $('file-input').click());
+  $('file-input').addEventListener('change', e => handleImport(e, account.id));
+  $('btn-rename').addEventListener('click', () => openRenameDialog(account));
+  $('btn-delete').addEventListener('click', () => handleDelete(account));
+}
+
+function renderTradeList(account) {
+  const list = $('trade-list');
+  const sorted = [...account.trades].sort((a, b) => new Date(b.closeTime) - new Date(a.closeTime));
+
+  if (!sorted.length) {
+    list.innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted);font-size:12px;">
+      Aucun trade. Importe un CSV pour commencer.
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = sorted.map(t => {
+    const isPos = t.pips >= 0;
+    const dirClass = (t.direction === 'Acheter' || t.direction === 'Buy') ? 'buy' : 'sell';
+    const hasNote = t.note && (t.note.emotion || t.note.text);
+    const noteLabel = hasNote ? (t.note.emotion ? t.note.emotion : '📝') : '+ Note';
+
+    return `<div class="trade-row" data-key="${esc(t.key)}">
+      <div class="trade-main">
+        <span class="direction-badge ${dirClass}">${esc(t.direction)}</span>
+        <span class="trade-date">${fmtDate(t.closeTime)}</span>
+        <span class="trade-qty">${esc(t.quantity)}</span>
+        <span class="trade-pips ${isPos ? 'pos' : 'neg'}">${fmtPips(t.pips)} pips</span>
+        <button class="btn-note ${hasNote ? 'has-note' : ''}" data-note-key="${esc(t.key)}">${esc(noteLabel)}</button>
+      </div>
+      <div class="note-area" id="note-${esc(t.key)}">
+        <div class="note-inner">
+          <div class="note-row">
+            <select class="emotion-select" data-emotion-key="${esc(t.key)}">
+              <option value="">Émotion...</option>
+              <option ${t.note?.emotion === 'Calme' ? 'selected' : ''}>Calme</option>
+              <option ${t.note?.emotion === 'Confiant' ? 'selected' : ''}>Confiant</option>
+              <option ${t.note?.emotion === 'Impatient' ? 'selected' : ''}>Impatient</option>
+              <option ${t.note?.emotion === 'Stressé' ? 'selected' : ''}>Stressé</option>
+              <option ${t.note?.emotion === 'Frustré' ? 'selected' : ''}>Frustré</option>
+            </select>
+            <textarea class="note-textarea" placeholder="Ce que je retiens de ce trade…" data-text-key="${esc(t.key)}" maxlength="1000">${esc(t.note?.text ?? '')}</textarea>
+          </div>
+          <button class="note-save-btn" data-save-key="${esc(t.key)}" data-account-id="${esc(account.id)}">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTotalView(state, main) {
+  const allTrades = state.accounts.flatMap(a => a.trades);
+  const total = totalPips(allTrades);
+  const mth = monthPips(allTrades);
+  const count = allTrades.length;
+
+  const sorted = [...allTrades].sort((a, b) => new Date(a.closeTime) - new Date(b.closeTime));
+
+  main.innerHTML = `
+    <div class="account-header">
+      <div>
+        <h1>Total global</h1>
+        <div class="account-meta">${state.accounts.length} compte${state.accounts.length !== 1 ? 's' : ''} · ${count} trade${count !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-secondary btn-print" onclick="window.print()">↓ PDF</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total cumulé</div>
+        <div class="stat-value ${posClass(total)}">${count ? fmtPips(total) : '—'}</div>
+        <div class="stat-sub">pips nets (tous comptes)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ce mois-ci</div>
+        <div class="stat-value ${posClass(mth)}">${count ? fmtPips(mth) : '—'}</div>
+        <div class="stat-sub">pips nets</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Trades</div>
+        <div class="stat-value neutral">${count}</div>
+        <div class="stat-sub">positions clôturées</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Courbe cumulative — tous comptes</span>
+        <span class="chart-dates" id="chart-dates"></span>
+      </div>
+      <div class="chart-container" id="chart-container"></div>
+    </div>
+
+    <div class="trades-panel">
+      <div class="trades-panel-header">
+        <span class="trades-panel-title">Répartition par compte</span>
+      </div>
+      <div style="padding:4px 0;">
+        ${state.accounts.map(acc => {
+          const t = totalPips(acc.trades);
+          const isPos = t >= 0;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);">
+            <span style="font-size:13px;font-weight:600;color:var(--ink);">${esc(acc.name)}</span>
+            <span style="font-size:14px;font-weight:700;color:${isPos ? 'var(--green)' : 'var(--red)'};">${acc.trades.length ? fmtPips(t) + ' pips' : '—'}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  renderChart($('chart-container'), allTrades);
+  if (sorted.length) {
+    $('chart-dates').textContent = fmtDate(sorted[0].closeTime) + ' — ' + fmtDate(sorted.at(-1).closeTime);
+  }
+}
+
+function handleImport(e, accountId) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const text = ev.target.result;
+    let trades;
+    try {
+      trades = parseCSV(text);
+    } catch {
+      toast('Fichier CSV invalide ou format non reconnu.');
+      return;
+    }
+    if (!trades.length) {
+      toast('Aucun trade XAUUSD trouvé dans ce fichier.');
+      return;
+    }
+    try {
+      const { added, skipped } = addTrades(accountId, trades);
+      const msg = `${added} trade${added !== 1 ? 's' : ''} ajouté${added !== 1 ? 's' : ''}${skipped ? `, ${skipped} doublon${skipped !== 1 ? 's' : ''} ignoré${skipped !== 1 ? 's' : ''}` : ''}.`;
+      toast(msg);
+      navigate(accountId);
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function openAddAccountDialog() {
+  const dialog = $('account-dialog');
+  $('dialog-title').textContent = 'Nouveau compte';
+  $('dialog-input').value = '';
+  $('dialog-confirm').textContent = 'Créer';
+  $('dialog-confirm').onclick = () => {
+    const name = $('dialog-input').value.trim();
+    if (!name) return;
+    try {
+      const acc = createAccount(name);
+      dialog.close();
+      navigate(acc.id);
+      toast('Compte créé.');
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  dialog.showModal();
+}
+
+function openRenameDialog(account) {
+  const dialog = $('account-dialog');
+  $('dialog-title').textContent = 'Renommer le compte';
+  $('dialog-input').value = account.name;
+  $('dialog-confirm').textContent = 'Renommer';
+  $('dialog-confirm').onclick = () => {
+    const name = $('dialog-input').value.trim();
+    if (!name) return;
+    try {
+      renameAccount(account.id, name);
+      dialog.close();
+      navigate(account.id);
+      toast('Compte renommé.');
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  dialog.showModal();
+}
+
+function handleDelete(account) {
+  if (!confirm(`Supprimer "${account.name}" et tous ses trades ?`)) return;
+  try {
+    deleteAccount(account.id);
+    const state = loadState();
+    selectedId = state.accounts.length ? state.accounts[0].id : null;
+    renderSidebar();
+    renderMain();
+    toast('Compte supprimé.');
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+$('btn-add-account').addEventListener('click', openAddAccountDialog);
+$('btn-total').addEventListener('click', () => navigate('total'));
+
+$('account-list').addEventListener('click', e => {
+  const btn = e.target.closest('[data-id]');
+  if (btn) navigate(btn.dataset.id);
+});
+
+$('dialog-cancel').addEventListener('click', () => {
+  $('account-dialog').close();
+});
+
+$('account-dialog').addEventListener('keydown', e => {
+  if (e.key === 'Enter') $('dialog-confirm').click();
+});
+
+$('main').addEventListener('click', e => {
+  const noteBtn = e.target.closest('[data-note-key]');
+  if (noteBtn) {
+    const key = noteBtn.dataset.noteKey;
+    const area = document.getElementById('note-' + key);
+    if (area) area.classList.toggle('open');
+    return;
+  }
+
+  const saveBtn = e.target.closest('[data-save-key]');
+  if (saveBtn) {
+    const key = saveBtn.dataset.saveKey;
+    const accId = saveBtn.dataset.accountId;
+    const list = $('trade-list');
+    if (!list) return;
+    const emotion = list.querySelector(`[data-emotion-key="${CSS.escape(key)}"]`)?.value ?? '';
+    const text = list.querySelector(`[data-text-key="${CSS.escape(key)}"]`)?.value?.trim() ?? '';
+    try {
+      saveNote(accId, key, { emotion, text });
+      toast('Note enregistrée.');
+      renderSidebar();
+      const btn = list.querySelector(`[data-note-key="${CSS.escape(key)}"]`);
+      if (btn) {
+        const hasNote = emotion || text;
+        btn.className = `btn-note ${hasNote ? 'has-note' : ''}`;
+        btn.textContent = hasNote ? (emotion || '📝') : '+ Note';
+      }
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+});
+
+(function init() {
+  const state = loadState();
+  if (state.accounts.length) {
+    selectedId = state.accounts[0].id;
+  }
+  renderSidebar();
+  renderMain();
+})();
+</script>
+</body>
+</html>
