@@ -7,7 +7,7 @@ const MONTHS = {
 function parseCTraderDate(str) {
   // Format: "30 Oct 2026 08:57:37.770"
   const m = str.match(/^(\d+)\s+(\w+)\s+(\d+)\s+(\d+):(\d+):(\d+)\.(\d+)/);
-  if (!m) return str;
+  if (!m) return null;
   const [, day, mon, year, h, min, s, ms] = m;
   return new Date(Date.UTC(+year, MONTHS[mon], +day, +h, +min, +s, +ms)).toISOString();
 }
@@ -54,7 +54,8 @@ export function parseCSV(text) {
     if (isNaN(entryPrice) || isNaN(exitPrice) || isNaN(pips)) continue;
 
     const closeTime = parseCTraderDate(closeRaw);
-    const key = buildKey(symbol, closeTime, entryPrice, exitPrice);
+    if (!closeTime) continue;
+    const key = buildKey(symbol, closeTime, entryRaw, exitRaw);
 
     trades.push({
       key,

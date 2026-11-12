@@ -105,6 +105,8 @@ summary.style.fontWeight = 'bold';
 summary.textContent = `${passed} passed, ${failed} failed`;
 summary.style.color = failed > 0 ? 'red' : 'green';
 out.appendChild(summary);
+
+localStorage.removeItem('pips-xau-v1');
 </script>
 </body>
 </html>

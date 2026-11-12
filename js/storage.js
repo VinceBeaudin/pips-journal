@@ -16,7 +16,11 @@ export function loadState() {
 }
 
 export function saveState(state) {
-  localStorage.setItem(KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(state));
+  } catch (e) {
+    throw new Error('Impossible d\'enregistrer : stockage plein ou inaccessible.');
+  }
 }
 
 export function createAccount(name) {
