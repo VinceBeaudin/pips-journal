@@ -1,15 +1,20 @@
 // js/csv.js
 const MONTHS = {
+  // English
   Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
+  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+  // French (cTrader exports French abbreviations when UI is in French)
+  Avr: 3, Mai: 4, Juin: 5, Juil: 6, Jui: 6, Aou: 7, Fev: 1
 };
 
 function parseCTraderDate(str) {
-  // Format: "30 Oct 2026 08:57:37.770"
+  // Format: "30 Oct 2026 08:57:37.770" or "30 Avr 2026 08:57:37.770"
   const m = str.match(/^(\d+)\s+(\w+)\s+(\d+)\s+(\d+):(\d+):(\d+)\.(\d+)/);
   if (!m) return null;
   const [, day, mon, year, h, min, s, ms] = m;
-  return new Date(Date.UTC(+year, MONTHS[mon], +day, +h, +min, +s, +ms)).toISOString();
+  const monthIndex = MONTHS[mon];
+  if (monthIndex === undefined) return null; // unknown month → skip trade
+  return new Date(Date.UTC(+year, monthIndex, +day, +h, +min, +s, +ms)).toISOString();
 }
 
 function parseNum(str) {
