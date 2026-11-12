@@ -129,7 +129,7 @@ function renderAccountView(account, main) {
         <div class="account-meta">${count} trade${count !== 1 ? 's' : ''}${lastDate ? ' · mis à jour le ' + esc(lastDate) : ''}</div>
       </div>
       <div class="header-actions">
-        <button class="btn-primary" id="btn-import">↥ Importer CSV</button>
+        <button class="btn-primary" id="btn-import">↥ Importer PDF</button>
         <button class="btn-secondary" id="btn-rename">Renommer</button>
         <button class="btn-danger" id="btn-delete">Supprimer</button>
       </div>
@@ -168,7 +168,7 @@ function renderAccountView(account, main) {
       <div id="trade-list"></div>
     </div>
 
-    <input type="file" id="file-input" accept=".csv,.pdf" hidden>
+    <input type="file" id="file-input" accept=".pdf" hidden>
   `;
 
   // Chart
@@ -316,19 +316,7 @@ function handleImport(e, accountId) {
     } catch (err) { toast(err.message); }
   };
 
-  if (file.name.toLowerCase().endsWith('.pdf')) {
-    parsePDFFile(file).then(finalize).catch(() => toast('Fichier PDF invalide ou format non reconnu.'));
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = ev => {
-    let trades;
-    try { trades = parseCSV(ev.target.result); }
-    catch { toast('Fichier CSV invalide ou format non reconnu.'); return; }
-    finalize(trades);
-  };
-  reader.readAsText(file, 'utf-8');
+  parsePDFFile(file).then(finalize).catch(() => toast('Fichier PDF invalide ou format non reconnu.'));
 }
 
 // ── Account CRUD ──────────────────────────────────────
