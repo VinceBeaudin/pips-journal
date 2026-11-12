@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Pips — Tests</title>
+  <style>
+    body { font: 14px/1.6 monospace; padding: 20px; }
+    .pass { color: green; } .fail { color: red; } .section { margin-top: 20px; font-weight: bold; }
+  </style>
+</head>
+<body>
+<h2>Tests</h2>
+<div id="output"></div>
+<script type="module">
+import { loadState, saveState, createAccount, renameAccount, deleteAccount, addTrades, saveNote } from './js/storage.js';
+import { parseCSV } from './js/csv.js';
+
+const out = document.getElementById('output');
+let passed = 0, failed = 0;
+
+function assert(label, condition) {
+  const el = document.createElement('div');
+  if (condition) {
+    el.className = 'pass'; el.textContent = '✓ ' + label; passed++;
+  } else {
+    el.className = 'fail'; el.textContent = '✗ ' + label; failed++;
+  }
+  out.appendChild(el);
+}
+
+function section(name) {
+  const el = document.createElement('div');
+  el.className = 'section'; el.textContent = name;
+  out.appendChild(el);
+}
+
+// Reset
+localStorage.removeItem('pips-xau-v1');
+
+section('storage.js');
+
+const s0 = loadState();
+assert('loadState returns empty accounts when no data', s0.accounts.length === 0);
+
+const acc = createAccount('Compte Test');
+assert('createAccount returns account with name', acc.name === 'Compte Test');
+assert('createAccount saves to state', loadState().accounts.length === 1);
+
+renameAccount(acc.id, 'Compte Renommé');
+assert('renameAccount updates name', loadState().accounts[0].name === 'Compte Renommé');
+
+const trades = [
+  { key: 'XAUUSD|2026-01-01T10:00:00.000Z|2000|2010', symbol: 'XAUUSD', direction: 'Acheter',
+    closeTime: '2026-01-01T10:00:00.000Z', entryPrice: 2000, exitPrice: 2010,
+    quantity: '0.5 Lots', pips: 10, netUSD: 500, note: null },
+  { key: 'XAUUSD|2026-01-02T10:00:00.000Z|2010|2020', symbol: 'XAUUSD', direction: 'Acheter',
+    closeTime: '2026-01-02T10:00:00.000Z', entryPrice: 2010, exitPrice: 2020,
+    quantity: '0.5 Lots', pips: 10, netUSD: 500, note: null },
+];
+
+const r1 = addTrades(acc.id, trades);
+assert('addTrades adds 2 new trades', r1.added === 2 && r1.skipped === 0);
+
+const r2 = addTrades(acc.id, trades);
+assert('addTrades skips 2 duplicates', r2.added === 0 && r2.skipped === 2);
+
+const mixed = [...trades, {
+  key: 'XAUUSD|2026-01-03T10:00:00.000Z|2020|2030', symbol: 'XAUUSD', direction: 'Acheter',
+  closeTime: '2026-01-03T10:00:00.000Z', entryPrice: 2020, exitPrice: 2030,
+  quantity: '0.5 Lots', pips: 10, netUSD: 500, note: null
+}];
+const r3 = addTrades(acc.id, mixed);
+assert('addTrades adds 1 new, skips 2 duplicates', r3.added === 1 && r3.skipped === 2);
+
+const tradeKey = trades[0].key;
+saveNote(acc.id, tradeKey, { emotion: 'Calme', text: 'Bon trade' });
+const saved = loadState().accounts[0].trades.find(t => t.key === tradeKey);
+assert('saveNote persists emotion and text', saved?.note?.emotion === 'Calme' && saved?.note?.text === 'Bon trade');
+
+deleteAccount(acc.id);
+assert('deleteAccount removes account', loadState().accounts.length === 0);
+
+section('csv.js');
+
+const csvText = `Transactions
+Symbole,Sens d'ouverture,Heure de clôture (UTC-5),Cours d'entrée,Price de clôture,Closing quantity,Pips,Net USD
+XAUUSD,Vendre,30 Oct 2026 08:57:37.770,4017.59,3917.73,0.5 Lots,99.86,4 988.12
+XAUUSD,Acheter,09 Nov 2026 19:38:41.510,4044.78,4123.10,0.5 Lots,78.32,3 847.87`;
+
+const parsed = parseCSV(csvText);
+assert('parseCSV returns 2 trades', parsed.length === 2);
+assert('first trade direction is Vendre', parsed[0].direction === 'Vendre');
+assert('first trade pips is 99.86', parsed[0].pips === 99.86);
+assert('first trade netUSD is 4988.12', parsed[0].netUSD === 4988.12);
+assert('second trade direction is Acheter', parsed[1].direction === 'Acheter');
+assert('trades have unique keys', parsed[0].key !== parsed[1].key);
+
+const csvWithDupe = csvText + '\nXAUUSD,Vendre,30 Oct 2026 08:57:37.770,4017.59,3917.73,0.5 Lots,99.86,4 988.12';
+const parsedDupe = parseCSV(csvWithDupe);
+assert('parseCSV returns all rows including duplicate (dedup is in storage)', parsedDupe.length === 3);
+
+const summary = document.createElement('div');
+summary.style.marginTop = '20px';
+summary.style.fontWeight = 'bold';
+summary.textContent = `${passed} passed, ${failed} failed`;
+summary.style.color = failed > 0 ? 'red' : 'green';
+out.appendChild(summary);
+</script>
+</body>
+</html>
