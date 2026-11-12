@@ -1,6 +1,6 @@
 // js/app.js
 import { loadState, createAccount, renameAccount, deleteAccount, addTrades, saveNote } from './storage.js';
-import { parseCSV } from './csv.js';
+import { parseCSV, parsePDFFile } from './csv.js';
 import { renderChart } from './chart.js';
 
 // ── State ──────────────────────────────────────────────
@@ -168,7 +168,7 @@ function renderAccountView(account, main) {
       <div id="trade-list"></div>
     </div>
 
-    <input type="file" id="file-input" accept=".csv" hidden>
+    <input type="file" id="file-input" accept=".csv,.pdf" hidden>
   `;
 
   // Chart
@@ -300,34 +300,33 @@ function renderTotalView(state, main) {
   }
 }
 
-// ── CSV Import ────────────────────────────────────────
+// ── Import (CSV + PDF) ────────────────────────────────
 function handleImport(e, accountId) {
   const file = e.target.files[0];
   if (!file) return;
-  e.target.value = ''; // allow re-importing same file
+  e.target.value = '';
 
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const text = ev.target.result;
-    let trades;
-    try {
-      trades = parseCSV(text);
-    } catch {
-      toast('Fichier CSV invalide ou format non reconnu.');
-      return;
-    }
-    if (!trades.length) {
-      toast('Aucun trade XAUUSD trouvé dans ce fichier.');
-      return;
-    }
+  const finalize = trades => {
+    if (!trades.length) { toast('Aucun trade XAUUSD trouvé dans ce fichier.'); return; }
     try {
       const { added, skipped } = addTrades(accountId, trades);
       const msg = `${added} trade${added !== 1 ? 's' : ''} ajouté${added !== 1 ? 's' : ''}${skipped ? `, ${skipped} doublon${skipped !== 1 ? 's' : ''} ignoré${skipped !== 1 ? 's' : ''}` : ''}.`;
       toast(msg);
       navigate(accountId);
-    } catch (err) {
-      toast(err.message);
-    }
+    } catch (err) { toast(err.message); }
+  };
+
+  if (file.name.toLowerCase().endsWith('.pdf')) {
+    parsePDFFile(file).then(finalize).catch(() => toast('Fichier PDF invalide ou format non reconnu.'));
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = ev => {
+    let trades;
+    try { trades = parseCSV(ev.target.result); }
+    catch { toast('Fichier CSV invalide ou format non reconnu.'); return; }
+    finalize(trades);
   };
   reader.readAsText(file, 'utf-8');
 }
