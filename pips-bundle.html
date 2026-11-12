@@ -461,6 +461,60 @@ dialog::backdrop { background: #0b233770; backdrop-filter: blur(2px); }
 
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
+/* ── Dashboard ───────────────────────────────────── */
+
+.brand { cursor: pointer; }
+.brand:hover .brand-dot { opacity: .7; }
+
+.dash-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin: 0 0 10px;
+}
+
+.accounts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.account-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.account-card:hover {
+  border-color: #94aab8;
+  box-shadow: 0 2px 10px #0001;
+}
+
+.account-card-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 8px;
+}
+
+.account-card-pips {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.account-card-sub { font-size: 10px; color: var(--muted); }
+
 /* ── Print / PDF ─────────────────────────────────── */
 
 @media print {
@@ -514,7 +568,7 @@ dialog::backdrop { background: #0b233770; backdrop-filter: blur(2px); }
 
   <!-- Sidebar -->
   <aside class="sidebar">
-    <div class="brand">pips<span class="brand-dot">.</span></div>
+    <div class="brand" id="brand-btn">pips<span class="brand-dot">.</span></div>
     <div class="sidebar-label">Mes comptes</div>
     <div class="account-list" id="account-list">
       <!-- Rendered by JS -->
@@ -974,10 +1028,8 @@ function navigate(id) {
   renderMain();
 }
 
-function renderMain() {
-  const state = loadState();
-  const main = $('main');
-
+// ── Dashboard ─────────────────────────────────────────
+function renderDashboard(state, main) {
   if (!state.accounts.length) {
     main.innerHTML = `
       <div class="empty-state">
@@ -988,16 +1040,109 @@ function renderMain() {
     return;
   }
 
+  const allTrades = state.accounts.flatMap(a => a.trades);
+  const total = totalPips(allTrades);
+  const mth   = monthPips(allTrades);
+  const count = allTrades.length;
+  const sorted = [...allTrades].sort((a, b) => new Date(a.closeTime) - new Date(b.closeTime));
+
+  const recentTrades = state.accounts
+    .flatMap(a => a.trades.map(t => ({ ...t, accountName: a.name })))
+    .sort((a, b) => new Date(b.closeTime) - new Date(a.closeTime))
+    .slice(0, 8);
+
+  main.innerHTML = `
+    <div class="account-header">
+      <div>
+        <h1>Tableau de bord</h1>
+        <div class="account-meta">${state.accounts.length} compte${state.accounts.length !== 1 ? 's' : ''} · ${count} trade${count !== 1 ? 's' : ''}</div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total cumulé</div>
+        <div class="stat-value ${posClass(total)}">${count ? fmtPips(total) : '—'}</div>
+        <div class="stat-sub">pips nets (tous comptes)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ce mois-ci</div>
+        <div class="stat-value ${posClass(mth)}">${count ? fmtPips(mth) : '—'}</div>
+        <div class="stat-sub">pips nets</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Trades</div>
+        <div class="stat-value neutral">${count}</div>
+        <div class="stat-sub">positions clôturées</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Courbe cumulative — tous comptes</span>
+        <span class="chart-dates" id="chart-dates"></span>
+      </div>
+      <div class="chart-container" id="chart-container"></div>
+    </div>
+
+    <p class="dash-section-label">Mes comptes</p>
+    <div class="accounts-grid">
+      ${state.accounts.map(acc => {
+        const t = totalPips(acc.trades);
+        const m = monthPips(acc.trades);
+        return `<div class="account-card" data-nav="${esc(acc.id)}">
+          <div class="account-card-name">${esc(acc.name)}</div>
+          <div class="account-card-pips ${posClass(t)}">${acc.trades.length ? fmtPips(t) : '—'}</div>
+          <div class="account-card-sub">${acc.trades.length
+            ? fmtPips(m) + ' ce mois · ' + acc.trades.length + ' trade' + (acc.trades.length !== 1 ? 's' : '')
+            : 'Aucun trade'}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    ${recentTrades.length ? `
+    <p class="dash-section-label">Trades récents</p>
+    <div class="trades-panel">
+      ${recentTrades.map(t => {
+        const dirClass = (t.direction === 'Acheter' || t.direction === 'Buy') ? 'buy' : 'sell';
+        return `<div class="trade-main" style="border-bottom:1px solid var(--line);">
+          <span class="direction-badge ${dirClass}">${esc(t.direction)}</span>
+          <span class="trade-date" style="color:var(--navy);font-weight:500;min-width:100px;">${esc(t.accountName)}</span>
+          <span class="trade-date">${fmtDate(t.closeTime)}</span>
+          <span class="trade-pips ${t.pips >= 0 ? 'pos' : 'neg'}">${fmtPips(t.pips)} pips</span>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+  `;
+
+  renderChart($('chart-container'), allTrades);
+  if (sorted.length) {
+    $('chart-dates').textContent = fmtDate(sorted[0].closeTime) + ' — ' + fmtDate(sorted.at(-1).closeTime);
+  }
+
+  main.querySelectorAll('[data-nav]').forEach(card => {
+    card.addEventListener('click', () => navigate(card.dataset.nav));
+  });
+}
+
+function renderMain() {
+  const state = loadState();
+  const main = $('main');
+
   if (selectedId === 'total') {
     renderTotalView(state, main);
     return;
   }
 
+  if (!selectedId || selectedId === 'dashboard') {
+    renderDashboard(state, main);
+    return;
+  }
+
   const account = state.accounts.find(a => a.id === selectedId);
   if (!account) {
-    selectedId = state.accounts[0].id;
-    renderSidebar();
-    renderAccountView(state.accounts[0], main);
+    selectedId = 'dashboard';
+    renderDashboard(state, main);
     return;
   }
 
@@ -1277,6 +1422,7 @@ function handleDelete(account) {
   }
 }
 
+$('brand-btn').addEventListener('click', () => navigate('dashboard'));
 $('btn-add-account').addEventListener('click', openAddAccountDialog);
 $('btn-total').addEventListener('click', () => navigate('total'));
 
@@ -1327,10 +1473,7 @@ $('main').addEventListener('click', e => {
 });
 
 (function init() {
-  const state = loadState();
-  if (state.accounts.length) {
-    selectedId = state.accounts[0].id;
-  }
+  selectedId = 'dashboard';
   renderSidebar();
   renderMain();
 })();

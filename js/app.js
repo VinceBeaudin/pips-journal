@@ -81,11 +81,8 @@ function navigate(id) {
   renderMain();
 }
 
-// ── Main render (dispatcher) ──────────────────────────
-function renderMain() {
-  const state = loadState();
-  const main = $('main');
-
+// ── Dashboard ─────────────────────────────────────────
+function renderDashboard(state, main) {
   if (!state.accounts.length) {
     main.innerHTML = `
       <div class="empty-state">
@@ -96,16 +93,110 @@ function renderMain() {
     return;
   }
 
+  const allTrades = state.accounts.flatMap(a => a.trades);
+  const total = totalPips(allTrades);
+  const mth   = monthPips(allTrades);
+  const count = allTrades.length;
+  const sorted = [...allTrades].sort((a, b) => new Date(a.closeTime) - new Date(b.closeTime));
+
+  const recentTrades = state.accounts
+    .flatMap(a => a.trades.map(t => ({ ...t, accountName: a.name })))
+    .sort((a, b) => new Date(b.closeTime) - new Date(a.closeTime))
+    .slice(0, 8);
+
+  main.innerHTML = `
+    <div class="account-header">
+      <div>
+        <h1>Tableau de bord</h1>
+        <div class="account-meta">${state.accounts.length} compte${state.accounts.length !== 1 ? 's' : ''} · ${count} trade${count !== 1 ? 's' : ''}</div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total cumulé</div>
+        <div class="stat-value ${posClass(total)}">${count ? fmtPips(total) : '—'}</div>
+        <div class="stat-sub">pips nets (tous comptes)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ce mois-ci</div>
+        <div class="stat-value ${posClass(mth)}">${count ? fmtPips(mth) : '—'}</div>
+        <div class="stat-sub">pips nets</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Trades</div>
+        <div class="stat-value neutral">${count}</div>
+        <div class="stat-sub">positions clôturées</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Courbe cumulative — tous comptes</span>
+        <span class="chart-dates" id="chart-dates"></span>
+      </div>
+      <div class="chart-container" id="chart-container"></div>
+    </div>
+
+    <p class="dash-section-label">Mes comptes</p>
+    <div class="accounts-grid">
+      ${state.accounts.map(acc => {
+        const t = totalPips(acc.trades);
+        const m = monthPips(acc.trades);
+        return `<div class="account-card" data-nav="${esc(acc.id)}">
+          <div class="account-card-name">${esc(acc.name)}</div>
+          <div class="account-card-pips ${posClass(t)}">${acc.trades.length ? fmtPips(t) : '—'}</div>
+          <div class="account-card-sub">${acc.trades.length
+            ? fmtPips(m) + ' ce mois · ' + acc.trades.length + ' trade' + (acc.trades.length !== 1 ? 's' : '')
+            : 'Aucun trade'}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    ${recentTrades.length ? `
+    <p class="dash-section-label">Trades récents</p>
+    <div class="trades-panel">
+      ${recentTrades.map(t => {
+        const dirClass = (t.direction === 'Acheter' || t.direction === 'Buy') ? 'buy' : 'sell';
+        return `<div class="trade-main" style="border-bottom:1px solid var(--line);">
+          <span class="direction-badge ${dirClass}">${esc(t.direction)}</span>
+          <span class="trade-date" style="color:var(--navy);font-weight:500;min-width:100px;">${esc(t.accountName)}</span>
+          <span class="trade-date">${fmtDate(t.closeTime)}</span>
+          <span class="trade-pips ${t.pips >= 0 ? 'pos' : 'neg'}">${fmtPips(t.pips)} pips</span>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+  `;
+
+  renderChart($('chart-container'), allTrades);
+  if (sorted.length) {
+    $('chart-dates').textContent = fmtDate(sorted[0].closeTime) + ' — ' + fmtDate(sorted.at(-1).closeTime);
+  }
+
+  main.querySelectorAll('[data-nav]').forEach(card => {
+    card.addEventListener('click', () => navigate(card.dataset.nav));
+  });
+}
+
+// ── Main render (dispatcher) ──────────────────────────
+function renderMain() {
+  const state = loadState();
+  const main = $('main');
+
   if (selectedId === 'total') {
     renderTotalView(state, main);
     return;
   }
 
+  if (!selectedId || selectedId === 'dashboard') {
+    renderDashboard(state, main);
+    return;
+  }
+
   const account = state.accounts.find(a => a.id === selectedId);
   if (!account) {
-    selectedId = state.accounts[0].id;
-    renderSidebar();
-    renderAccountView(state.accounts[0], main);
+    selectedId = 'dashboard';
+    renderDashboard(state, main);
     return;
   }
 
@@ -390,6 +481,7 @@ function handleDelete(account) {
 }
 
 // ── Event listeners ───────────────────────────────────
+$('brand-btn').addEventListener('click', () => navigate('dashboard'));
 $('btn-add-account').addEventListener('click', openAddAccountDialog);
 $('btn-total').addEventListener('click', () => navigate('total'));
 
@@ -442,10 +534,7 @@ $('main').addEventListener('click', e => {
 
 // ── Init ──────────────────────────────────────────────
 (function init() {
-  const state = loadState();
-  if (state.accounts.length) {
-    selectedId = state.accounts[0].id;
-  }
+  selectedId = 'dashboard';
   renderSidebar();
   renderMain();
 })();
