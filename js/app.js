@@ -4,7 +4,8 @@ import { parseCSV, parsePDFFile } from './csv.js';
 import { renderChart } from './chart.js';
 
 // ── State ──────────────────────────────────────────────
-let selectedId = null; // account id or 'total'
+let selectedId = null; // account id | 'total' | 'dashboard'
+let currentFilter = 'all'; // 'week' | 'month' | '3months' | 'all'
 
 // ── DOM helpers ───────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -50,6 +51,30 @@ function monthPips(trades) {
 
 function posClass(v) {
   return v > 1e-8 ? 'pos' : v < -1e-8 ? 'neg' : 'neutral';
+}
+
+function filterTrades(trades, filter) {
+  if (filter === 'all') return trades;
+  const now = new Date();
+  let start;
+  if (filter === 'week')    start = new Date(now - 7 * 86400000);
+  if (filter === 'month')   start = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (filter === '3months') start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  return trades.filter(t => new Date(t.closeTime) >= start);
+}
+
+function getMonthlyBreakdown(trades) {
+  const map = {};
+  for (const t of trades) {
+    const d = new Date(t.closeTime);
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    if (!map[key]) map[key] = { pips: 0, count: 0, label: new Intl.DateTimeFormat('fr-CA', { month: 'short', year: 'numeric' }).format(d) };
+    map[key].pips += t.pips;
+    map[key].count++;
+  }
+  return Object.entries(map)
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([, v]) => v);
 }
 
 // ── Sidebar render ────────────────────────────────────
@@ -252,9 +277,30 @@ function renderAccountView(account, main) {
       <div class="chart-container" id="chart-container"></div>
     </div>
 
+    ${account.trades.length ? `
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Répartition mensuelle</span>
+      </div>
+      <div>
+        ${getMonthlyBreakdown(account.trades).map(m => `
+          <div class="monthly-row">
+            <span class="monthly-label">${esc(m.label)}</span>
+            <span class="monthly-count">${m.count} trade${m.count !== 1 ? 's' : ''}</span>
+            <span class="monthly-pips ${posClass(m.pips)}">${fmtPips(m.pips)} pips</span>
+          </div>`).join('')}
+      </div>
+    </div>` : ''}
+
     <div class="trades-panel">
       <div class="trades-panel-header">
-        <span class="trades-panel-title">Tous les trades</span>
+        <span class="trades-panel-title">Trades</span>
+        <div class="filter-tabs">
+          <button class="filter-tab ${currentFilter === 'week'    ? 'active' : ''}" data-filter="week"    data-account="${esc(account.id)}">7 jours</button>
+          <button class="filter-tab ${currentFilter === 'month'   ? 'active' : ''}" data-filter="month"   data-account="${esc(account.id)}">Mois</button>
+          <button class="filter-tab ${currentFilter === '3months' ? 'active' : ''}" data-filter="3months" data-account="${esc(account.id)}">3 mois</button>
+          <button class="filter-tab ${currentFilter === 'all'     ? 'active' : ''}" data-filter="all"     data-account="${esc(account.id)}">Tout</button>
+        </div>
       </div>
       <div id="trade-list"></div>
     </div>
@@ -262,14 +308,12 @@ function renderAccountView(account, main) {
     <input type="file" id="file-input" accept=".csv,.pdf,application/pdf,text/csv" hidden>
   `;
 
-  // Chart
   renderChart($('chart-container'), account.trades);
   if (account.trades.length) {
     const sorted = [...account.trades].sort((a, b) => new Date(a.closeTime) - new Date(b.closeTime));
     $('chart-dates').textContent = fmtDate(sorted[0].closeTime) + ' — ' + fmtDate(sorted.at(-1).closeTime);
   }
 
-  // Trade list
   renderTradeList(account);
 
   // Event bindings
@@ -282,11 +326,19 @@ function renderAccountView(account, main) {
 // ── Trade list ────────────────────────────────────────
 function renderTradeList(account) {
   const list = $('trade-list');
-  const sorted = [...account.trades].sort((a, b) => new Date(b.closeTime) - new Date(a.closeTime));
+  const filtered = filterTrades(account.trades, currentFilter);
+  const sorted = [...filtered].sort((a, b) => new Date(b.closeTime) - new Date(a.closeTime));
+
+  if (!account.trades.length) {
+    list.innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted);font-size:12px;">
+      Aucun trade. Importe un fichier pour commencer.
+    </div>`;
+    return;
+  }
 
   if (!sorted.length) {
     list.innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted);font-size:12px;">
-      Aucun trade. Importe un CSV pour commencer.
+      Aucun trade sur cette période.
     </div>`;
     return;
   }
@@ -499,7 +551,49 @@ $('account-dialog').addEventListener('keydown', e => {
 });
 
 // Single delegated listener for note interactions (trade list)
+// ── Backup ────────────────────────────────────────────
+function exportBackup() {
+  const json = JSON.stringify(loadState(), null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = `pips-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+}
+
+function importBackup(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.version !== 1 || !Array.isArray(data.accounts)) {
+        toast('Fichier de sauvegarde invalide.');
+        return;
+      }
+      saveState(data);
+      selectedId = 'dashboard';
+      renderSidebar();
+      renderMain();
+      toast('Sauvegarde restaurée.');
+    } catch { toast('Impossible de lire ce fichier.'); }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+$('btn-export-backup').addEventListener('click', exportBackup);
+$('import-backup-input').addEventListener('change', importBackup);
+
 $('main').addEventListener('click', e => {
+  const filterBtn = e.target.closest('[data-filter]');
+  if (filterBtn) {
+    currentFilter = filterBtn.dataset.filter;
+    const acc = loadState().accounts.find(a => a.id === filterBtn.dataset.account);
+    if (acc) renderAccountView(acc, $('main'));
+    return;
+  }
+
   const noteBtn = e.target.closest('[data-note-key]');
   if (noteBtn) {
     const key = noteBtn.dataset.noteKey;
