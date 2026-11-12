@@ -1,0 +1,443 @@
+// js/app.js
+import { loadState, createAccount, renameAccount, deleteAccount, addTrades, saveNote } from './storage.js';
+import { parseCSV } from './csv.js';
+import { renderChart } from './chart.js';
+
+// ── State ──────────────────────────────────────────────
+let selectedId = null; // account id or 'total'
+
+// ── DOM helpers ───────────────────────────────────────
+const $ = id => document.getElementById(id);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+);
+
+// ── Toast ─────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 4000);
+}
+
+// ── Formatting ────────────────────────────────────────
+function fmtPips(v) {
+  const n = Math.abs(v) < 1e-8 ? 0 : v;
+  const s = new Intl.NumberFormat('fr-CA', { maximumFractionDigits: 1 }).format(n);
+  return (n > 1e-8 ? '+' : '') + s;
+}
+
+function fmtDate(iso) {
+  return new Intl.DateTimeFormat('fr-CA', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
+}
+
+function totalPips(trades) {
+  return trades.reduce((s, t) => s + t.pips, 0);
+}
+
+function monthPips(trades) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  return trades
+    .filter(t => new Date(t.closeTime) >= start)
+    .reduce((s, t) => s + t.pips, 0);
+}
+
+// ── Sidebar render ────────────────────────────────────
+function renderSidebar() {
+  const state = loadState();
+  const list = $('account-list');
+
+  list.innerHTML = state.accounts.map(acc => {
+    const total = totalPips(acc.trades);
+    const cls = selectedId === acc.id ? 'account-btn active' : 'account-btn';
+    const pipStr = acc.trades.length ? fmtPips(total) + ' pips' : '— pips';
+    return `<button class="${cls}" data-id="${esc(acc.id)}">
+      <span class="acc-name">${esc(acc.name)}</span>
+      <span class="acc-pips">${esc(pipStr)}</span>
+    </button>`;
+  }).join('');
+
+  // Total global
+  const allTrades = state.accounts.flatMap(a => a.trades);
+  const grandTotal = totalPips(allTrades);
+  $('sidebar-total-value').textContent = allTrades.length ? fmtPips(grandTotal) : '—';
+  $('btn-total').className = selectedId === 'total' ? 'total-btn active' : 'total-btn';
+}
+
+// ── Navigate ──────────────────────────────────────────
+function navigate(id) {
+  selectedId = id;
+  renderSidebar();
+  renderMain();
+}
+
+// ── Main render (dispatcher) ──────────────────────────
+function renderMain() {
+  const state = loadState();
+  const main = $('main');
+
+  if (!state.accounts.length) {
+    main.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">◫</div>
+        <strong>Crée ton premier compte pour commencer.</strong>
+        <p>Clique sur "+ Nouveau compte" dans la barre latérale.</p>
+      </div>`;
+    return;
+  }
+
+  if (selectedId === 'total') {
+    renderTotalView(state, main);
+    return;
+  }
+
+  const account = state.accounts.find(a => a.id === selectedId);
+  if (!account) {
+    selectedId = state.accounts[0].id;
+    renderSidebar();
+    renderAccountView(state.accounts[0], main);
+    return;
+  }
+
+  renderAccountView(account, main);
+}
+
+// ── Account view ──────────────────────────────────────
+function renderAccountView(account, main) {
+  const total = totalPips(account.trades);
+  const mth   = monthPips(account.trades);
+  const count = account.trades.length;
+
+  const lastDate = count
+    ? fmtDate([...account.trades].sort((a, b) => new Date(b.closeTime) - new Date(a.closeTime))[0].closeTime)
+    : null;
+
+  const posClass = v => v > 1e-8 ? 'pos' : v < -1e-8 ? 'neg' : 'neutral';
+
+  main.innerHTML = `
+    <div class="account-header">
+      <div>
+        <h1>${esc(account.name)}</h1>
+        <div class="account-meta">${count} trade${count !== 1 ? 's' : ''}${lastDate ? ' · mis à jour le ' + lastDate : ''}</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-primary" id="btn-import">↥ Importer CSV</button>
+        <button class="btn-secondary" id="btn-rename">Renommer</button>
+        <button class="btn-danger" id="btn-delete">Supprimer</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total cumulé</div>
+        <div class="stat-value ${posClass(total)}">${count ? fmtPips(total) : '—'}</div>
+        <div class="stat-sub">pips nets</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ce mois-ci</div>
+        <div class="stat-value ${posClass(mth)}">${count ? fmtPips(mth) : '—'}</div>
+        <div class="stat-sub">pips nets</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Trades</div>
+        <div class="stat-value neutral">${count}</div>
+        <div class="stat-sub">positions clôturées</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Courbe cumulative</span>
+        <span class="chart-dates" id="chart-dates"></span>
+      </div>
+      <div class="chart-container" id="chart-container"></div>
+    </div>
+
+    <div class="trades-panel">
+      <div class="trades-panel-header">
+        <span class="trades-panel-title">Tous les trades</span>
+      </div>
+      <div id="trade-list"></div>
+    </div>
+
+    <input type="file" id="file-input" accept=".csv" hidden>
+  `;
+
+  // Chart
+  renderChart($('chart-container'), account.trades);
+  if (account.trades.length) {
+    const sorted = [...account.trades].sort((a, b) => new Date(a.closeTime) - new Date(b.closeTime));
+    $('chart-dates').textContent = fmtDate(sorted[0].closeTime) + ' — ' + fmtDate(sorted.at(-1).closeTime);
+  }
+
+  // Trade list
+  renderTradeList(account);
+
+  // Event bindings
+  $('btn-import').addEventListener('click', () => $('file-input').click());
+  $('file-input').addEventListener('change', e => handleImport(e, account.id));
+  $('btn-rename').addEventListener('click', () => openRenameDialog(account));
+  $('btn-delete').addEventListener('click', () => handleDelete(account));
+}
+
+// ── Trade list ────────────────────────────────────────
+function renderTradeList(account) {
+  const list = $('trade-list');
+  const sorted = [...account.trades].sort((a, b) => new Date(b.closeTime) - new Date(a.closeTime));
+
+  if (!sorted.length) {
+    list.innerHTML = `<div style="padding:32px;text-align:center;color:var(--muted);font-size:12px;">
+      Aucun trade. Importe un CSV pour commencer.
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = sorted.map(t => {
+    const isPos = t.pips >= 0;
+    const dirClass = t.direction === 'Acheter' ? 'buy' : 'sell';
+    const hasNote = t.note && (t.note.emotion || t.note.text);
+    const noteLabel = hasNote ? (t.note.emotion ? t.note.emotion : '📝') : '+ Note';
+
+    return `<div class="trade-row" data-key="${esc(t.key)}">
+      <div class="trade-main">
+        <span class="direction-badge ${dirClass}">${esc(t.direction)}</span>
+        <span class="trade-date">${fmtDate(t.closeTime)}</span>
+        <span class="trade-qty">${esc(t.quantity)}</span>
+        <span class="trade-pips ${isPos ? 'pos' : 'neg'}">${fmtPips(t.pips)} pips</span>
+        <button class="btn-note ${hasNote ? 'has-note' : ''}" data-note-key="${esc(t.key)}">${esc(noteLabel)}</button>
+      </div>
+      <div class="note-area" id="note-${esc(t.key)}">
+        <div class="note-inner">
+          <div class="note-row">
+            <select class="emotion-select" data-emotion-key="${esc(t.key)}">
+              <option value="">Émotion...</option>
+              <option ${t.note?.emotion === 'Calme' ? 'selected' : ''}>Calme</option>
+              <option ${t.note?.emotion === 'Confiant' ? 'selected' : ''}>Confiant</option>
+              <option ${t.note?.emotion === 'Impatient' ? 'selected' : ''}>Impatient</option>
+              <option ${t.note?.emotion === 'Stressé' ? 'selected' : ''}>Stressé</option>
+              <option ${t.note?.emotion === 'Frustré' ? 'selected' : ''}>Frustré</option>
+            </select>
+            <textarea class="note-textarea" placeholder="Ce que je retiens de ce trade…" data-text-key="${esc(t.key)}" maxlength="1000">${esc(t.note?.text ?? '')}</textarea>
+          </div>
+          <button class="note-save-btn" data-save-key="${esc(t.key)}" data-account-id="${esc(account.id)}">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Note toggle & save
+  list.addEventListener('click', e => {
+    const noteBtn = e.target.closest('[data-note-key]');
+    if (noteBtn) {
+      const key = noteBtn.dataset.noteKey;
+      const area = document.getElementById('note-' + key);
+      if (area) area.classList.toggle('open');
+      return;
+    }
+
+    const saveBtn = e.target.closest('[data-save-key]');
+    if (saveBtn) {
+      const key = saveBtn.dataset.saveKey;
+      const accId = saveBtn.dataset.accountId;
+      const emotion = list.querySelector(`[data-emotion-key="${CSS.escape(key)}"]`)?.value ?? '';
+      const text = list.querySelector(`[data-text-key="${CSS.escape(key)}"]`)?.value?.trim() ?? '';
+      try {
+        saveNote(accId, key, { emotion, text });
+        toast('Note enregistrée.');
+        renderSidebar();
+        const btn = list.querySelector(`[data-note-key="${CSS.escape(key)}"]`);
+        if (btn) {
+          const hasNote = emotion || text;
+          btn.className = `btn-note ${hasNote ? 'has-note' : ''}`;
+          btn.textContent = hasNote ? (emotion || '📝') : '+ Note';
+        }
+      } catch (err) {
+        toast(err.message);
+      }
+    }
+  });
+}
+
+// ── Total view ────────────────────────────────────────
+function renderTotalView(state, main) {
+  const allTrades = state.accounts.flatMap(a => a.trades);
+  const total = totalPips(allTrades);
+  const mth = monthPips(allTrades);
+  const count = allTrades.length;
+  const posClass = v => v > 1e-8 ? 'pos' : v < -1e-8 ? 'neg' : 'neutral';
+
+  const sorted = [...allTrades].sort((a, b) => new Date(a.closeTime) - new Date(b.closeTime));
+
+  main.innerHTML = `
+    <div class="account-header">
+      <div>
+        <h1>Total global</h1>
+        <div class="account-meta">${state.accounts.length} compte${state.accounts.length !== 1 ? 's' : ''} · ${count} trade${count !== 1 ? 's' : ''}</div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total cumulé</div>
+        <div class="stat-value ${posClass(total)}">${count ? fmtPips(total) : '—'}</div>
+        <div class="stat-sub">pips nets (tous comptes)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ce mois-ci</div>
+        <div class="stat-value ${posClass(mth)}">${count ? fmtPips(mth) : '—'}</div>
+        <div class="stat-sub">pips nets</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Trades</div>
+        <div class="stat-value neutral">${count}</div>
+        <div class="stat-sub">positions clôturées</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="chart-card-title">Courbe cumulative — tous comptes</span>
+        <span class="chart-dates" id="chart-dates"></span>
+      </div>
+      <div class="chart-container" id="chart-container"></div>
+    </div>
+
+    <div class="trades-panel">
+      <div class="trades-panel-header">
+        <span class="trades-panel-title">Répartition par compte</span>
+      </div>
+      <div style="padding:4px 0;">
+        ${state.accounts.map(acc => {
+          const t = totalPips(acc.trades);
+          const isPos = t >= 0;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);">
+            <span style="font-size:13px;font-weight:600;color:var(--ink);">${esc(acc.name)}</span>
+            <span style="font-size:14px;font-weight:700;color:${isPos ? 'var(--green)' : 'var(--red)'};">${acc.trades.length ? fmtPips(t) + ' pips' : '—'}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  renderChart($('chart-container'), allTrades);
+  if (sorted.length) {
+    $('chart-dates').textContent = fmtDate(sorted[0].closeTime) + ' — ' + fmtDate(sorted.at(-1).closeTime);
+  }
+}
+
+// ── CSV Import ────────────────────────────────────────
+function handleImport(e, accountId) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = ''; // allow re-importing same file
+
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const text = ev.target.result;
+    let trades;
+    try {
+      trades = parseCSV(text);
+    } catch {
+      toast('Fichier CSV invalide ou format non reconnu.');
+      return;
+    }
+    if (!trades.length) {
+      toast('Aucun trade XAUUSD trouvé dans ce fichier.');
+      return;
+    }
+    try {
+      const { added, skipped } = addTrades(accountId, trades);
+      const msg = `${added} trade${added !== 1 ? 's' : ''} ajouté${added !== 1 ? 's' : ''}${skipped ? `, ${skipped} doublon${skipped !== 1 ? 's' : ''} ignoré${skipped !== 1 ? 's' : ''}` : ''}.`;
+      toast(msg);
+      navigate(accountId);
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// ── Account CRUD ──────────────────────────────────────
+function openAddAccountDialog() {
+  const dialog = $('account-dialog');
+  $('dialog-title').textContent = 'Nouveau compte';
+  $('dialog-input').value = '';
+  $('dialog-confirm').textContent = 'Créer';
+  $('dialog-confirm').onclick = () => {
+    const name = $('dialog-input').value.trim();
+    if (!name) return;
+    try {
+      const acc = createAccount(name);
+      dialog.close();
+      navigate(acc.id);
+      toast('Compte créé.');
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  dialog.showModal();
+}
+
+function openRenameDialog(account) {
+  const dialog = $('account-dialog');
+  $('dialog-title').textContent = 'Renommer le compte';
+  $('dialog-input').value = account.name;
+  $('dialog-confirm').textContent = 'Renommer';
+  $('dialog-confirm').onclick = () => {
+    const name = $('dialog-input').value.trim();
+    if (!name) return;
+    try {
+      renameAccount(account.id, name);
+      dialog.close();
+      navigate(account.id);
+      toast('Compte renommé.');
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  dialog.showModal();
+}
+
+function handleDelete(account) {
+  if (!confirm(`Supprimer "${account.name}" et tous ses trades ?`)) return;
+  try {
+    deleteAccount(account.id);
+    const state = loadState();
+    selectedId = state.accounts.length ? state.accounts[0].id : null;
+    renderSidebar();
+    renderMain();
+    toast('Compte supprimé.');
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+// ── Event listeners ───────────────────────────────────
+$('btn-add-account').addEventListener('click', openAddAccountDialog);
+$('btn-total').addEventListener('click', () => navigate('total'));
+
+$('account-list').addEventListener('click', e => {
+  const btn = e.target.closest('[data-id]');
+  if (btn) navigate(btn.dataset.id);
+});
+
+$('dialog-cancel').addEventListener('click', () => {
+  $('account-dialog').close();
+});
+
+$('account-dialog').addEventListener('keydown', e => {
+  if (e.key === 'Enter') $('dialog-confirm').click();
+});
+
+// ── Init ──────────────────────────────────────────────
+(function init() {
+  const state = loadState();
+  if (state.accounts.length) {
+    selectedId = state.accounts[0].id;
+  }
+  renderSidebar();
+  renderMain();
+})();
