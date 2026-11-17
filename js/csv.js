@@ -124,14 +124,14 @@ export async function parsePDFFile(file) {
     if (texts[0] !== 'XAUUSD') continue;
     const line = texts.join(' ');
     const m = line.match(
-      /^XAUUSD\s+(Vendre|Acheter|Buy|Sell)\s+(\d{1,2}\s+[A-Za-z\u00C0-\u024F]+\s+\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+(?:\s+Lots)?)\s+(-?[\d.]+)\s+(-?[\d\s.,]+)$/
+      /^XAUUSD\s+(Vendre|Acheter|Buy|Sell)\s+(\d{1,2}\s+[A-Za-z\u00C0-\u024F]+\s+\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+(?:\s+Lots)?)\s+(-?[\d.]+)(?:\s+(-?[\d\s.,]+))?$/
     );
     if (!m) continue;
     const [, direction, closeRaw, entryRaw, exitRaw, qtyRaw, pipsRaw, netUSDRaw] = m;
     const entryPrice = parseFloat(entryRaw);
     const exitPrice  = parseFloat(exitRaw);
     const pips       = parseFloat(pipsRaw);
-    const netUSD     = parseFloat(netUSDRaw.replace(/\s/g, ''));
+    const netUSD     = netUSDRaw ? parseFloat(netUSDRaw.replace(/\s/g, '')) : 0;
     if (isNaN(entryPrice) || isNaN(exitPrice) || isNaN(pips)) continue;
     const closeTime = parseCTraderDate(closeRaw);
     if (!closeTime) continue;
@@ -172,8 +172,14 @@ export async function parsePDFFile(file) {
     const combined = chunk6.match(/^(-?[\d.]+)\s+(-?[\d\s]+\.?\d+)$/);
     if (combined) {
       pipsRaw = combined[1]; netUSDRaw = combined[2].replace(/\s/g, ''); advance = 7;
-    } else if (/^-?[\d.]+$/.test(chunk6) && i + 7 < chunks.length) {
-      pipsRaw = chunk6; netUSDRaw = chunks[i + 7].replace(/\s/g, ''); advance = 8;
+    } else if (/^-?[\d.]+$/.test(chunk6)) {
+      pipsRaw = chunk6;
+      // Check if next chunk is a number (netUSD) or a new trade row
+      if (i + 7 < chunks.length && /^-?[\d\s.,]+$/.test(chunks[i + 7])) {
+        netUSDRaw = chunks[i + 7].replace(/\s/g, ''); advance = 8;
+      } else {
+        netUSDRaw = '0'; advance = 7;
+      }
     } else { i++; continue; }
     const entryPrice = parseFloat(entryRaw);
     const exitPrice  = parseFloat(exitRaw);
