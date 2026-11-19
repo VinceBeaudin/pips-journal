@@ -27,58 +27,129 @@ function buildKey(symbol, closeTime, entryPrice, exitPrice) {
   return `${symbol}|${closeTime}|${entryPrice}|${exitPrice}`;
 }
 
-export function parseCSV(text) {
-  const lines = text
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0);
+// Parse a CSV line handling quoted values
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQuotes = !inQuotes; }
+    else if (c === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else { current += c; }
+  }
+  result.push(current.trim());
+  return result;
+}
 
-  // Line 0: "Transactions", Line 1: column headers, Line 2+: data
-  const dataLines = lines.slice(2);
+// DD/MM/YYYY HH:MM:SS.mmm — new cTrader CSV export
+function parseDDMMYYYYDate(str) {
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\.(\d+)/);
+  if (!m) return null;
+  const [, day, month, year, h, min, s, ms] = m;
+  return new Date(Date.UTC(+year, +month - 1, +day, +h, +min, +s, +ms.slice(0, 3).padEnd(3, '0'))).toISOString();
+}
 
+// YYYY-MM-DD HH:MM:SS — trading journal CSV
+function parseISODate(str) {
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const [, year, month, day, h, min, s] = m;
+  return new Date(Date.UTC(+year, +month - 1, +day, +h, +min, +s)).toISOString();
+}
+
+// Legacy cTrader CSV: "Transactions" on line 0, headers on line 1, 8 cols
+function parseLegacyCSV(dataLines) {
   const trades = [];
-
   for (const line of dataLines) {
     const cols = line.split(',');
     if (cols.length < 8) continue;
-
-    const symbol      = cols[0].trim();
-    const direction   = cols[1].trim();
-    const closeRaw    = cols[2].trim();
-    const entryRaw    = cols[3].trim();
-    const exitRaw     = cols[4].trim();
-    const quantity    = cols[5].trim();
-    const pipsRaw     = cols[6].trim();
-    const netUSDRaw   = cols[7].trim();
-
+    const symbol    = cols[0].trim();
     if (symbol !== 'XAUUSD') continue;
-
+    const direction = cols[1].trim();
+    const closeRaw  = cols[2].trim();
+    const entryRaw  = cols[3].trim();
+    const exitRaw   = cols[4].trim();
+    const quantity  = cols[5].trim();
+    const pips      = parseNum(cols[6].trim());
+    const netUSD    = parseNum(cols[7].trim());
     const entryPrice = parseNum(entryRaw);
     const exitPrice  = parseNum(exitRaw);
-    const pips       = parseNum(pipsRaw);
-    const netUSD     = parseNum(netUSDRaw);
-
     if (isNaN(entryPrice) || isNaN(exitPrice) || isNaN(pips)) continue;
-
     const closeTime = parseCTraderDate(closeRaw);
     if (!closeTime) continue;
-    const key = buildKey(symbol, closeTime, entryRaw, exitRaw);
-
-    trades.push({
-      key,
-      symbol,
-      direction,
-      closeTime,
-      entryPrice,
-      exitPrice,
-      quantity,
-      pips,
-      netUSD,
-      note: null
-    });
+    trades.push({ key: buildKey(symbol, closeTime, entryRaw, exitRaw), symbol, direction, closeTime, entryPrice, exitPrice, quantity, pips, netUSD, note: null });
   }
-
   return trades;
+}
+
+// New cTrader CSV export (cT_*.csv):
+// Symbole | Sens d'ouverture | Heure de clôture | Cours d'entrée | Price de clôture | Quantité | Pips
+function parseCTraderExportCSV(dataLines) {
+  const trades = [];
+  for (const line of dataLines) {
+    const cols = parseCSVLine(line);
+    if (cols.length < 7) continue;
+    const symbol = cols[0];
+    if (symbol !== 'XAUUSD') continue;
+    const direction  = cols[1];
+    const closeRaw   = cols[2];
+    const entryRaw   = cols[3];
+    const exitRaw    = cols[4];
+    const quantity   = cols[5];
+    const pips       = parseFloat(cols[6]);
+    const entryPrice = parseFloat(entryRaw);
+    const exitPrice  = parseFloat(exitRaw);
+    if (isNaN(entryPrice) || isNaN(exitPrice) || isNaN(pips)) continue;
+    const closeTime = parseDDMMYYYYDate(closeRaw);
+    if (!closeTime) continue;
+    trades.push({ key: buildKey(symbol, closeTime, entryRaw, exitRaw), symbol, direction, closeTime, entryPrice, exitPrice, quantity, pips, netUSD: 0, note: null });
+  }
+  return trades;
+}
+
+// Trading journal CSV (trading-journal.csv):
+// Ticket | Ouvrir | Type | Volume | Symbole | Prix(entry) | SL | TP | Fermeture | Prix(exit) | Swap | Commissions | Profit | Pips | ...
+function parseTradingJournalCSV(dataLines) {
+  const trades = [];
+  for (const line of dataLines) {
+    const cols = parseCSVLine(line);
+    if (cols.length < 14) continue;
+    const symbol = cols[4];
+    if (symbol !== 'XAUUSD') continue;
+    const rawDir    = cols[2].toLowerCase();
+    const direction = rawDir === 'buy' ? 'Buy' : rawDir === 'sell' ? 'Sell' : cols[2];
+    const entryRaw  = cols[5];
+    const exitRaw   = cols[9];
+    const closeRaw  = cols[8];
+    const quantity  = cols[3];
+    const pips      = parseFloat(cols[13]);
+    const entryPrice = parseFloat(entryRaw);
+    const exitPrice  = parseFloat(exitRaw);
+    if (isNaN(entryPrice) || isNaN(exitPrice) || isNaN(pips)) continue;
+    const closeTime = parseISODate(closeRaw);
+    if (!closeTime) continue;
+    trades.push({ key: buildKey(symbol, closeTime, entryRaw, exitRaw), symbol, direction, closeTime, entryPrice, exitPrice, quantity, pips, netUSD: 0, note: null });
+  }
+  return trades;
+}
+
+export function parseCSV(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (!lines.length) return [];
+
+  // Legacy cTrader: "Transactions" header
+  if (lines[0] === 'Transactions') return parseLegacyCSV(lines.slice(2));
+
+  const cols = parseCSVLine(lines[0]);
+
+  // New cTrader export: "Symbole","Sens d'ouverture",...
+  if (cols[0] === 'Symbole' && cols[1] && cols[1].includes('ouverture')) return parseCTraderExportCSV(lines.slice(1));
+
+  // Trading journal: Ticket,Ouvrir,Type,Volume,Symbole,...
+  if (cols[0] === 'Ticket') return parseTradingJournalCSV(lines.slice(1));
+
+  return [];
 }
 
 export async function parsePDFFile(file) {
