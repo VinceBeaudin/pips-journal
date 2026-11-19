@@ -1,5 +1,5 @@
 // js/app.js
-import { loadState, createAccount, renameAccount, deleteAccount, addTrades, saveNote } from './storage.js';
+import { loadState, saveState, createAccount, renameAccount, deleteAccount, addTrades, saveNote } from './storage.js';
 import { parseCSV, parsePDFFile } from './csv.js';
 import { renderChart } from './chart.js';
 
@@ -245,7 +245,8 @@ function renderAccountView(account, main) {
         <div class="account-meta">${count} trade${count !== 1 ? 's' : ''}${lastDate ? ' · mis à jour le ' + esc(lastDate) : ''}</div>
       </div>
       <div class="header-actions">
-        <button class="btn-primary" id="btn-import">↥ Importer</button>
+        <button class="btn-primary" id="btn-import-csv">↥ CSV</button>
+        <button class="btn-primary" id="btn-import-pdf">↥ PDF</button>
         <button class="btn-secondary" id="btn-rename">Renommer</button>
         <button class="btn-danger" id="btn-delete">Supprimer</button>
       </div>
@@ -305,7 +306,8 @@ function renderAccountView(account, main) {
       <div id="trade-list"></div>
     </div>
 
-    <input type="file" id="file-input" accept=".csv,.pdf,application/pdf,text/csv" hidden>
+    <input type="file" id="file-input-csv" accept=".csv,text/csv" hidden>
+    <input type="file" id="file-input-pdf" accept=".pdf,application/pdf" hidden>
   `;
 
   renderChart($('chart-container'), account.trades);
@@ -317,8 +319,10 @@ function renderAccountView(account, main) {
   renderTradeList(account);
 
   // Event bindings
-  $('btn-import').addEventListener('click', () => $('file-input').click());
-  $('file-input').addEventListener('change', e => handleImport(e, account.id));
+  $('btn-import-csv').addEventListener('click', () => $('file-input-csv').click());
+  $('file-input-csv').addEventListener('change', e => handleImport(e, account.id));
+  $('btn-import-pdf').addEventListener('click', () => $('file-input-pdf').click());
+  $('file-input-pdf').addEventListener('change', e => handleImport(e, account.id));
   $('btn-rename').addEventListener('click', () => openRenameDialog(account));
   $('btn-delete').addEventListener('click', () => handleDelete(account));
 }
