@@ -1,5 +1,5 @@
 // js/app.js
-import { loadState, saveState, createAccount, renameAccount, deleteAccount, addTrades, saveNote } from './storage.js';
+import { loadState, saveState, createAccount, renameAccount, deleteAccount, addTrades, clearTrades, saveNote } from './storage.js';
 import { parseCSV, parsePDFFile } from './csv.js';
 import { renderChart } from './chart.js';
 

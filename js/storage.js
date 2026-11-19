@@ -59,6 +59,16 @@ export function addTrades(accountId, trades) {
   return { added: newTrades.length, skipped: trades.length - newTrades.length };
 }
 
+export function clearTrades(accountId) {
+  const state = loadState();
+  const account = state.accounts.find(a => a.id === accountId);
+  if (!account) return 0;
+  const count = account.trades.length;
+  account.trades = [];
+  saveState(state);
+  return count;
+}
+
 export function saveNote(accountId, tradeKey, note) {
   const state = loadState();
   const account = state.accounts.find(a => a.id === accountId);
