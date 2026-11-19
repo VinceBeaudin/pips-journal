@@ -368,8 +368,8 @@ function renderTradeList(account) {
   list.innerHTML = sorted.map(t => {
     const isPos = t.pips >= 0;
     const dirClass = (t.direction === 'Acheter' || t.direction === 'Buy') ? 'buy' : 'sell';
-    const hasNote = t.note && (t.note.emotion || t.note.text);
-    const noteLabel = hasNote ? (t.note.emotion ? t.note.emotion : '📝') : '+ Note';
+    const noteText = t.note?.text || (t.note?.emotion ? t.note.emotion : '');
+    const hasNote = !!noteText;
 
     return `<div class="trade-row" data-key="${esc(t.key)}">
       <div class="trade-main">
@@ -377,22 +377,11 @@ function renderTradeList(account) {
         <span class="trade-date">${fmtDate(t.closeTime)}</span>
         <span class="trade-qty">${esc(t.quantity)}</span>
         <span class="trade-pips ${isPos ? 'pos' : 'neg'}">${fmtPips(t.pips)} pips</span>
-        <button class="btn-note ${hasNote ? 'has-note' : ''}" data-note-key="${esc(t.key)}">${esc(noteLabel)}</button>
+        <button class="btn-note ${hasNote ? 'has-note' : ''}" data-note-key="${esc(t.key)}">Note</button>
       </div>
       <div class="note-area" id="note-${esc(t.key)}">
         <div class="note-inner">
-          <div class="note-row">
-            <select class="emotion-select" data-emotion-key="${esc(t.key)}">
-              <option value="">Émotion...</option>
-              <option ${t.note?.emotion === 'Calme' ? 'selected' : ''}>Calme</option>
-              <option ${t.note?.emotion === 'Confiant' ? 'selected' : ''}>Confiant</option>
-              <option ${t.note?.emotion === 'Impatient' ? 'selected' : ''}>Impatient</option>
-              <option ${t.note?.emotion === 'Stressé' ? 'selected' : ''}>Stressé</option>
-              <option ${t.note?.emotion === 'Frustré' ? 'selected' : ''}>Frustré</option>
-            </select>
-            <textarea class="note-textarea" placeholder="Ce que je retiens de ce trade…" data-text-key="${esc(t.key)}" maxlength="1000">${esc(t.note?.text ?? '')}</textarea>
-          </div>
-          <button class="note-save-btn" data-save-key="${esc(t.key)}" data-account-id="${esc(account.id)}">Enregistrer</button>
+          <textarea class="note-textarea" placeholder="Ce que je retiens de ce trade..." data-text-key="${esc(t.key)}" data-account-id="${esc(account.id)}" maxlength="1000">${esc(noteText)}</textarea>
         </div>
       </div>
     </div>`;
@@ -606,28 +595,15 @@ $('main').addEventListener('click', e => {
     return;
   }
 
-  const saveBtn = e.target.closest('[data-save-key]');
-  if (saveBtn) {
-    const key = saveBtn.dataset.saveKey;
-    const accId = saveBtn.dataset.accountId;
-    const list = $('trade-list');
-    if (!list) return;
-    const emotion = list.querySelector(`[data-emotion-key="${CSS.escape(key)}"]`)?.value ?? '';
-    const text = list.querySelector(`[data-text-key="${CSS.escape(key)}"]`)?.value?.trim() ?? '';
-    try {
-      saveNote(accId, key, { emotion, text });
-      toast('Note enregistrée.');
-      renderSidebar();
-      const btn = list.querySelector(`[data-note-key="${CSS.escape(key)}"]`);
-      if (btn) {
-        const hasNote = emotion || text;
-        btn.className = `btn-note ${hasNote ? 'has-note' : ''}`;
-        btn.textContent = hasNote ? (emotion || '📝') : '+ Note';
-      }
-    } catch (err) {
-      toast(err.message);
-    }
-  }
+});
+
+$('main').addEventListener('focusout', e => {
+  const textarea = e.target.closest('.note-textarea');
+  if (!textarea) return;
+  const key = textarea.dataset.textKey;
+  const accId = textarea.dataset.accountId;
+  const text = textarea.value.trim();
+  saveNote(accId, key, { text });
 });
 
 // ── Init ──────────────────────────────────────────────
