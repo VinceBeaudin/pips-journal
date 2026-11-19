@@ -41,16 +41,64 @@ function totalPips(trades) {
   return trades.reduce((s, t) => s + t.pips, 0);
 }
 
-function monthPips(trades) {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  return trades
-    .filter(t => new Date(t.closeTime) >= start)
-    .reduce((s, t) => s + t.pips, 0);
-}
-
 function posClass(v) {
   return v > 1e-8 ? 'pos' : v < -1e-8 ? 'neg' : 'neutral';
+}
+
+function computeStats(trades) {
+  const totalPipsVal = totalPips(trades);
+  const count = trades.length;
+  if (!count) return { totalPips: 0, winRate: null, winCount: 0, lossCount: 0, rrRatio: null, bestTrade: null, worstTrade: null };
+
+  const wins = trades.filter(t => t.pips >= 0);
+  const losses = trades.filter(t => t.pips < 0);
+  const winRate = Math.round((wins.length / count) * 100);
+
+  let rrRatio = null;
+  if (wins.length > 0 && losses.length > 0) {
+    const avgWin = wins.reduce((s, t) => s + t.pips, 0) / wins.length;
+    const avgLoss = Math.abs(losses.reduce((s, t) => s + t.pips, 0) / losses.length);
+    rrRatio = avgLoss > 0 ? avgWin / avgLoss : null;
+  }
+
+  const sorted = [...trades].sort((a, b) => b.pips - a.pips);
+  const bestTrade = sorted[0];
+  const worstTrade = sorted[sorted.length - 1];
+
+  return { totalPips: totalPipsVal, winRate, winCount: wins.length, lossCount: losses.length, rrRatio, bestTrade, worstTrade };
+}
+
+function renderStatsHTML(trades) {
+  const s = computeStats(trades);
+  const count = trades.length;
+  return `
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total cumulé</div>
+        <div class="stat-value ${posClass(s.totalPips)}">${count ? fmtPips(s.totalPips) : '—'}</div>
+        <div class="stat-sub">pips nets</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Win rate</div>
+        <div class="stat-value ${s.winRate !== null && s.winRate >= 50 ? 'pos' : s.winRate !== null ? 'neg' : 'neutral'}">${s.winRate !== null ? s.winRate + '%' : '—'}</div>
+        <div class="stat-sub">${count ? s.winCount + ' gagnant' + (s.winCount !== 1 ? 's' : '') + ' / ' + count + ' trade' + (count !== 1 ? 's' : '') : ''}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ratio R/R</div>
+        <div class="stat-value ${s.rrRatio !== null && s.rrRatio >= 1 ? 'pos' : s.rrRatio !== null ? 'neg' : 'neutral'}">${s.rrRatio !== null ? '1:' + s.rrRatio.toFixed(1) : '—'}</div>
+        <div class="stat-sub">gain moy / perte moy</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Meilleur trade</div>
+        <div class="stat-value pos">${s.bestTrade ? fmtPips(s.bestTrade.pips) : '—'}</div>
+        <div class="stat-sub">${s.bestTrade ? fmtDate(s.bestTrade.closeTime) : ''}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pire trade</div>
+        <div class="stat-value neg">${s.worstTrade ? fmtPips(s.worstTrade.pips) : '—'}</div>
+        <div class="stat-sub">${s.worstTrade ? fmtDate(s.worstTrade.closeTime) : ''}</div>
+      </div>
+    </div>`;
 }
 
 function filterTrades(trades, filter) {
@@ -119,8 +167,6 @@ function renderDashboard(state, main) {
   }
 
   const allTrades = state.accounts.flatMap(a => a.trades);
-  const total = totalPips(allTrades);
-  const mth   = monthPips(allTrades);
   const count = allTrades.length;
   const sorted = [...allTrades].sort((a, b) => new Date(a.closeTime) - new Date(b.closeTime));
 
@@ -137,23 +183,7 @@ function renderDashboard(state, main) {
       </div>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Total cumulé</div>
-        <div class="stat-value ${posClass(total)}">${count ? fmtPips(total) : '—'}</div>
-        <div class="stat-sub">pips nets (tous comptes)</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Ce mois-ci</div>
-        <div class="stat-value ${posClass(mth)}">${count ? fmtPips(mth) : '—'}</div>
-        <div class="stat-sub">pips nets</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Trades</div>
-        <div class="stat-value neutral">${count}</div>
-        <div class="stat-sub">positions clôturées</div>
-      </div>
-    </div>
+    ${renderStatsHTML(allTrades)}
 
     <div class="chart-card">
       <div class="chart-card-header">
@@ -167,12 +197,11 @@ function renderDashboard(state, main) {
     <div class="accounts-grid">
       ${state.accounts.map(acc => {
         const t = totalPips(acc.trades);
-        const m = monthPips(acc.trades);
         return `<div class="account-card" data-nav="${esc(acc.id)}">
           <div class="account-card-name">${esc(acc.name)}</div>
           <div class="account-card-pips ${posClass(t)}">${acc.trades.length ? fmtPips(t) : '—'}</div>
           <div class="account-card-sub">${acc.trades.length
-            ? fmtPips(m) + ' ce mois · ' + acc.trades.length + ' trade' + (acc.trades.length !== 1 ? 's' : '')
+            ? acc.trades.length + ' trade' + (acc.trades.length !== 1 ? 's' : '')
             : 'Aucun trade'}</div>
         </div>`;
       }).join('')}
@@ -230,8 +259,6 @@ function renderMain() {
 
 // ── Account view ──────────────────────────────────────
 function renderAccountView(account, main) {
-  const total = totalPips(account.trades);
-  const mth   = monthPips(account.trades);
   const count = account.trades.length;
 
   const lastDate = count
@@ -253,23 +280,7 @@ function renderAccountView(account, main) {
       </div>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Total cumulé</div>
-        <div class="stat-value ${posClass(total)}">${count ? fmtPips(total) : '—'}</div>
-        <div class="stat-sub">pips nets</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Ce mois-ci</div>
-        <div class="stat-value ${posClass(mth)}">${count ? fmtPips(mth) : '—'}</div>
-        <div class="stat-sub">pips nets</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Nb de trades</div>
-        <div class="stat-value neutral">${count}</div>
-        <div class="stat-sub">positions clôturées</div>
-      </div>
-    </div>
+    ${renderStatsHTML(account.trades)}
 
     <div class="chart-card">
       <div class="chart-card-header">
@@ -391,8 +402,6 @@ function renderTradeList(account) {
 // ── Total view ────────────────────────────────────────
 function renderTotalView(state, main) {
   const allTrades = state.accounts.flatMap(a => a.trades);
-  const total = totalPips(allTrades);
-  const mth = monthPips(allTrades);
   const count = allTrades.length;
 
   const sorted = [...allTrades].sort((a, b) => new Date(a.closeTime) - new Date(b.closeTime));
@@ -405,23 +414,7 @@ function renderTotalView(state, main) {
       </div>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Total cumulé</div>
-        <div class="stat-value ${posClass(total)}">${count ? fmtPips(total) : '—'}</div>
-        <div class="stat-sub">pips nets (tous comptes)</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Ce mois-ci</div>
-        <div class="stat-value ${posClass(mth)}">${count ? fmtPips(mth) : '—'}</div>
-        <div class="stat-sub">pips nets</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Trades</div>
-        <div class="stat-value neutral">${count}</div>
-        <div class="stat-sub">positions clôturées</div>
-      </div>
-    </div>
+    ${renderStatsHTML(allTrades)}
 
     <div class="chart-card">
       <div class="chart-card-header">
