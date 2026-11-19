@@ -248,6 +248,7 @@ function renderAccountView(account, main) {
         <button class="btn-primary" id="btn-import-csv">↥ CSV</button>
         <button class="btn-primary" id="btn-import-pdf">↥ PDF</button>
         <button class="btn-secondary" id="btn-rename">Renommer</button>
+        <button class="btn-secondary" id="btn-clear">Vider</button>
         <button class="btn-danger" id="btn-delete">Supprimer</button>
       </div>
     </div>
@@ -325,6 +326,12 @@ function renderAccountView(account, main) {
   $('file-input-pdf').addEventListener('change', e => handleImport(e, account.id));
   $('btn-rename').addEventListener('click', () => openRenameDialog(account));
   $('btn-delete').addEventListener('click', () => handleDelete(account));
+  $('btn-clear').addEventListener('click', () => {
+    if (!confirm(`Vider tous les trades de "${account.name}" ? Cette action est irréversible.`)) return;
+    const count = clearTrades(account.id);
+    toast(`${count} trade${count !== 1 ? 's' : ''} supprimé${count !== 1 ? 's' : ''}.`);
+    navigate(account.id);
+  });
 }
 
 // ── Trade list ────────────────────────────────────────

@@ -590,11 +590,14 @@ dialog::backdrop { background: #0b233778; backdrop-filter: blur(3px); }
   #toast,
   dialog,
   .btn-print,
-  #btn-import,
+  #btn-import-csv,
+  #btn-import-pdf,
+  #btn-clear,
   #btn-rename,
   #btn-delete,
   #btn-add-account,
-  #file-input,
+  #file-input-csv,
+  #file-input-pdf,
   .btn-note,
   .note-area { display: none !important; }
 
